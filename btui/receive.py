@@ -10,6 +10,7 @@ salir): nada de aceptar pushes sin estar escuchando explicitamente.
 """
 
 import asyncio
+import select
 import signal
 import sys
 from pathlib import Path
@@ -31,6 +32,42 @@ AGENT_PATH = "/btui/receive/agent"
 
 OBEX_ERROR_REJECTED = "org.bluez.obex.Error.Rejected"
 FALLBACK_NAME = "recibido.bin"
+PROMPT_TIMEOUT = 60
+KNOWN_YES = {"a", "s", "y", ""}
+KNOWN_NO = {"c", "n", "q", "x", "no", "cancelar"}
+
+
+def _choice(text: str) -> bool | None:
+    """True acepta, False rechaza, None vuelve a preguntar."""
+    choice = str(text).strip().lower()
+    if choice in KNOWN_YES:
+        return True
+    if choice in KNOWN_NO:
+        return False
+    return None
+
+
+def _ask_accept(remote: str, filename: str, display_name: str) -> bool:
+    """Prompt interactivo en el terminal donde corre `--receive` (foreground)."""
+    prompt = (
+        f"[push] «{display_name}» ({remote}) envia "
+        f"'{filename or 'archivo'}': aceptar [a] / cancelar [c] "
+    )
+    while True:
+        print(prompt, end="", file=sys.stderr, flush=True)
+        ready, _, _ = select.select([sys.stdin], [], [], PROMPT_TIMEOUT)
+        if not ready:
+            print(" (timeout, rechazado)", file=sys.stderr, flush=True)
+            return False
+        line = sys.stdin.readline()
+        decision = _choice(line)
+        if decision is True:
+            print("aceptado", file=sys.stderr, flush=True)
+            return True
+        if decision is False:
+            print("rechazado", file=sys.stderr, flush=True)
+            return False
+        print("?", end="", file=sys.stderr, flush=True)
 
 
 def _unique_path(target: Path) -> Path:
@@ -124,11 +161,26 @@ class ObexReceiveAgent(ServiceInterface):
                 remote = _value(sprops.get("Destination"))
             except DBusError:
                 remote = None
-        if remote and not known.is_trusted(str(remote)):
-            raise DBusError(OBEX_ERROR_REJECTED, "equipo no confiado")
         name = FALLBACK_NAME
         if proposed and str(proposed):
             name = Path(str(proposed)).name
+        if remote and not known.is_trusted(str(remote)):
+            if not sys.stdin.isatty():
+                raise DBusError(OBEX_ERROR_REJECTED, "equipo no confiado")
+            display = next(
+                (
+                    d.get("name") or ""
+                    for d in known.load()
+                    if str(d.get("mac", "")).lower() == str(remote).lower()
+                ),
+                "",
+            )
+            loop = asyncio.get_running_loop()
+            accepted = await loop.run_in_executor(
+                None, _ask_accept, str(remote), name, display or str(remote)
+            )
+            if not accepted:
+                raise DBusError(OBEX_ERROR_REJECTED, "equipo no confiado")
         target = str(self._root / name)
         self._targets[str(transfer)] = target
         return target

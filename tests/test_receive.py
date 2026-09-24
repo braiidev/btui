@@ -185,6 +185,58 @@ def test_authorize_guarda_destino_por_transfer(monkeypatch):
     assert agent.authorize_target("/org/bluez/obex/server/s1/t1") is None
 
 
+def test_choice_acepta_rechaza_o_repregunta():
+    assert receive._choice("a") is True
+    assert receive._choice("A") is True
+    assert receive._choice("") is True
+    assert receive._choice("s") is True
+    assert receive._choice("c") is False
+    assert receive._choice("no") is False
+    assert receive._choice("q") is False
+    assert receive._choice("zz") is None
+    assert receive._choice(" c ") is False
+
+
+def test_ask_accept_por_tty(capsys, monkeypatch):
+    class _S:
+        def isatty(self) -> bool:
+            return True
+
+    llamadas = []
+
+    def _fake_select(stdin, *_a, **_k):
+        llamadas.append(1)
+        return ([stdin], [], [])
+
+    class _FakeStdin:
+        def readline(self) -> str:
+            return "a\n"
+
+    monkeypatch.setattr(receive.select, "select", _fake_select)
+    monkeypatch.setattr(receive.sys, "stdin", _FakeStdin())
+    assert receive._ask_accept("11:22", "f.txt", "fulano") is True
+    assert llamadas
+    assert "«fulano» (11:22) envia 'f.txt'" in capsys.readouterr().err
+
+
+def test_ask_accept_rechaza_no(capsys, monkeypatch):
+    monkeypatch.setattr(receive.select, "select", lambda *a, **k: ([a[0]], [], []))
+    monkeypatch.setattr(
+        receive.sys, "stdin", type("S", (), {"readline": lambda self: "n\n"})()
+    )
+    assert receive._ask_accept("11:22", "f.txt", "x") is False
+    assert "rechazado" in capsys.readouterr().err
+
+
+def test_ask_accept_timeout_rechaza(capsys, monkeypatch):
+    monkeypatch.setattr(receive.select, "select", lambda *a, **k: ([], [], []))
+    monkeypatch.setattr(
+        receive.sys, "stdin", type("S", (), {"readline": lambda self: ""})()
+    )
+    assert receive._ask_accept("11:22", "f.txt", "x") is False
+    assert "timeout" in capsys.readouterr().err
+
+
 def test_unique_path_sufija_en_colision(tmp_path):
     target = tmp_path / "a.jpg"
     target.write_bytes(b"x")
