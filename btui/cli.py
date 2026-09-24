@@ -51,6 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="diagnostico de driver/hardware del adaptador",
     )
     parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="interfaz curses: estado del adaptador, conocidos y descubrimiento",
+    )
+    parser.add_argument(
         "--on", action="store_true", help="enciende el radio del adaptador"
     )
     parser.add_argument(
@@ -212,6 +217,10 @@ def run(argv: list[str]) -> int:
         from btui import info
 
         return info.run()
+    if ns.tui:
+        from btui import tui
+
+        return tui.run()
     if ns.command == "daemon":
         return run_daemon()
     if ns.devices:
