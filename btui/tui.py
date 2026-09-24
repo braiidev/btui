@@ -14,6 +14,7 @@ import sys
 from typing import Callable, cast
 
 from btui import __version__
+from btui import config
 from btui import diagnostic as diag
 from btui import devices as devmod
 from btui import known
@@ -455,7 +456,7 @@ def _devices_action(state: dict, row: dict) -> None:
                     "input",
                     {
                         "prompt": "dir destino (Enter acepta): ",
-                        "buffer": "/tmp/recibidos",
+                        "buffer": config.get_receive_dir(),
                         "kind": "receive",
                     },
                 ),
@@ -540,12 +541,13 @@ def _submit(state: dict) -> None:
 
         _run_action(state, act)
     elif kind == "receive":
+        config.set_receive_dir(text)
         state["terminal"] = [
             sys.executable,
             "-m",
             "btui",
             "--receive",
-            text or "/tmp/recibidos",
+            text or config.get_receive_dir(),
         ]
 
 

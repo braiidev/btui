@@ -13,7 +13,7 @@ import asyncio
 import signal
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 from dbus_next.aio.message_bus import MessageBus
 from dbus_next.constants import MessageType
@@ -30,6 +30,35 @@ if TYPE_CHECKING:
 AGENT_PATH = "/btui/receive/agent"
 
 OBEX_ERROR_REJECTED = "org.bluez.obex.Error.Rejected"
+FALLBACK_NAME = "recibido.bin"
+
+
+def _unique_path(target: Path) -> Path:
+    if not target.exists():
+        return target
+    for i in range(1, 100):
+        cand = target.with_name(f"{target.stem} ({i}){target.suffix}")
+        if not cand.exists():
+            return cand
+    return target
+
+
+def finalize_file(root: Path, target: Path, proposed: str) -> Path | None:
+    """Devuelve la ruta final tras (re)nombrar segun `proposed`.
+
+    obexd completa `Filename` recien al autorizar en muchos telefonos; por eso
+    se guarda con el nombre propuesto en ese momento (o `recibido.bin`) y aca,
+    al completar, se renombra al nombre real evitando colisiones. None si no
+    quedo archivo.
+    """
+    if not target.exists():
+        return None
+    if not proposed:
+        return target
+    final = _unique_path(root / Path(str(proposed)).name)
+    if target != final:
+        target.rename(final)
+    return final if final.exists() else None
 
 
 def _value(value: Any) -> Any:
@@ -37,12 +66,22 @@ def _value(value: Any) -> Any:
 
 
 class ObexReceiveAgent(ServiceInterface):
-    """Autoriza pushes solo de equipos conocidos+trusted, guardando en `root`."""
+    """Autoriza pushes (trusted o por prompt) y guarda en `root`.
 
-    def __init__(self, root: Path, bus: MessageBus) -> None:
+    `on_done` recibe los archivos ya renombrados y se usa para anunciar.
+    """
+
+    def __init__(
+        self,
+        root: Path,
+        bus: MessageBus,
+        on_done: Callable[[Path, int | None, str | None], None] | None = None,
+    ) -> None:
         super().__init__("org.bluez.obex.Agent1")
         self._root = root
         self._bus = cast(Any, bus)
+        self.on_done = on_done
+        self._targets: dict[str, str] = {}
 
     @method()
     def Release(self) -> None:
@@ -51,6 +90,12 @@ class ObexReceiveAgent(ServiceInterface):
     @method()
     def Cancel(self) -> None:
         pass
+
+    def authorize_target(self, transfer_path: str) -> str | None:
+        return self._targets.get(transfer_path)
+
+    def forget(self, transfer_path: str) -> None:
+        self._targets.pop(transfer_path, None)
 
     async def _props(self, obj_path: str, iface: str) -> dict[str, Any]:
         reply = await self._bus.call(
@@ -81,15 +126,34 @@ class ObexReceiveAgent(ServiceInterface):
                 remote = None
         if remote and not known.is_trusted(str(remote)):
             raise DBusError(OBEX_ERROR_REJECTED, "equipo no confiado")
-        name = "recibido.bin"
+        name = FALLBACK_NAME
         if proposed and str(proposed):
             name = Path(str(proposed)).name
-        return str(self._root / name)
+        target = str(self._root / name)
+        self._targets[str(transfer)] = target
+        return target
 
 
-async def _print_progress(bus: MessageBus, interval: float = 0.5) -> None:
-    """Reporta Transferred/Size de cada transfer servidor activo."""
-    last: dict[str, tuple[int | None, int | None]] = {}
+def _show_completed(final: Path, size: int | None, target: str | None) -> None:
+    line = f"recibido: {final} ({size or '?'} bytes)"
+    if target and final.name != Path(target).name:
+        line = f"recibido: {final.name} (era {Path(target).name}) ({size or '?'} bytes)"
+    print(line, file=sys.stderr, flush=True)
+
+
+async def _monitor(
+    bus: MessageBus,
+    agent: ObexReceiveAgent,
+    root: Path,
+    interval: float = 0.5,
+) -> None:
+    """Sondea transfers del servidor: reporta progreso y finaliza cada push.
+
+    Al completar (Status=complete o el objeto desaparece tras transferir) y si
+    obexd ya entrego `Filename`, renombra el archivo al nombre real y avisa.
+    """
+    last: dict[str, tuple[int | None, int | None, str | None]] = {}
+    finalized: set[str] = set()
     while True:
         try:
             reply = cast(
@@ -106,6 +170,7 @@ async def _print_progress(bus: MessageBus, interval: float = 0.5) -> None:
             objects = cast(dict, dict(reply.body[0] or {})) if reply.body else {}
         except Exception:
             objects = {}
+        present: set[str] = set()
         for obj_path, ifaces in objects.items():
             if not str(obj_path).startswith("/org/bluez/obex/server/"):
                 continue
@@ -115,16 +180,39 @@ async def _print_progress(bus: MessageBus, interval: float = 0.5) -> None:
             transferred = obex._as_int(transfer.get("Transferred"))
             size = obex._as_int(transfer.get("Size"))
             status = _value(transfer.get("Status"))
-            key = (transferred, size)
-            if transferred is None or last.get(str(obj_path)) == key:
+            filename = str(_value(transfer.get("Filename")) or "")
+            key = str(obj_path)
+            present.add(key)
+            if status == obex.TRANSFER_COMPLETE and key not in finalized:
+                finalized.add(key)
+                target = agent.authorize_target(key)
+                if target:
+                    final = finalize_file(root, Path(target), filename)
+                    if final is not None and agent.on_done is not None:
+                        agent.on_done(final, size, target)
+                agent.forget(key)
                 continue
-            last[str(obj_path)] = key
+            if transferred is None or last.get(key) == (transferred, size, status):
+                continue
+            last[key] = (transferred, size, status)
             pct = transferred * 100 // size if size else 0
-            name = Path(obj_path).name
+            name = Path(key).name
             line = f"[recibido {name}] {transferred}/{size or '?'} ({pct}%)"
             if status:
                 line += f" {status}"
             print(line, file=sys.stderr, flush=True)
+        for gone in [
+            key for key in last if key not in present and key not in finalized
+        ]:
+            finalized.add(gone)
+            transferred, size, _status = last[gone]
+            if transferred is not None and (size is None or transferred >= (size or 0)):
+                target = agent.authorize_target(gone)
+                if target:
+                    final = finalize_file(root, Path(target), "")
+                    if final is not None and agent.on_done is not None:
+                        agent.on_done(final, size, target)
+            agent.forget(gone)
         await asyncio.sleep(interval)
 
 
@@ -133,7 +221,8 @@ async def _run_receive(root: Path, interval: float = 0.5) -> int:
     session = obex.ObexSession()
     await session.start(root=root)
     bus = session.bus
-    bus.export(AGENT_PATH, ObexReceiveAgent(root, bus))
+    agent = ObexReceiveAgent(root, bus, on_done=_show_completed)
+    bus.export(AGENT_PATH, agent)
     reply = cast(
         Any,
         await bus.call(
@@ -164,7 +253,7 @@ async def _run_receive(root: Path, interval: float = 0.5) -> int:
         flush=True,
     )
     try:
-        task = asyncio.create_task(_print_progress(bus, interval))
+        task = asyncio.create_task(_monitor(bus, agent, root, interval))
         try:
             await stop.wait()
         finally:

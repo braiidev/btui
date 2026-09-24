@@ -17,6 +17,7 @@ from typing import Callable
 
 from btui import __version__
 from btui import cli
+from btui import config
 from btui import diagnostic as diag
 
 MENU: list[tuple[str, str]] = [
@@ -110,7 +111,7 @@ def _dispatch(state: dict, item_id: str) -> None:
     elif item_id == "receive":
         state["input"] = {
             "prompt": "dir destino: ",
-            "buffer": "/tmp/recibidos",
+            "buffer": config.get_receive_dir(),
             "kind": "receive",
         }
     elif item_id == "name":
@@ -172,7 +173,14 @@ def _submit_input(state: dict) -> None:
             ),
         )
     elif kind == "receive":
-        state["terminal"] = [sys.executable, "-m", "btui", "--receive", text]
+        config.set_receive_dir(text)
+        state["terminal"] = [
+            sys.executable,
+            "-m",
+            "btui",
+            "--receive",
+            text or config.get_receive_dir(),
+        ]
 
 
 def _handle_input(state: dict, key: int) -> None:

@@ -63,7 +63,9 @@ def test_submit_input_name(monkeypatch):
     assert calls == ["ok"]
 
 
-def test_submit_input_receive_arma_terminal():
+def test_submit_input_receive_arma_terminal(tmp_path, monkeypatch):
+    monkeypatch.setattr(menu.config, "config_dir", lambda: tmp_path)
     state = {"input": {"prompt": "dir: ", "buffer": "/tmp/x", "kind": "receive"}}
     menu._submit_input(state)
     assert state["terminal"][-2:] == ["--receive", "/tmp/x"]
+    assert menu.config.get_receive_dir() == "/tmp/x"

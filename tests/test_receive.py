@@ -159,6 +159,70 @@ def test_authorize_push_sin_filename_fallback():
     assert _run_authorize(agent) == "/tmp/recibido/recibido.bin"
 
 
+def test_authorize_guarda_destino_por_transfer(monkeypatch):
+    monkeypatch.setattr(
+        known,
+        "load",
+        lambda cfg=None: [{"mac": "40:EC:99:A2:3B:B2", "trusted": True}],
+    )
+    bus = FakeBus(
+        [
+            FakeReply(
+                [
+                    {
+                        "Session": Variant("o", "/org/bluez/obex/server/s1"),
+                        "Filename": Variant("s", "foto.jpg"),
+                    }
+                ]
+            ),
+            FakeReply([{"Destination": Variant("s", "40:EC:99:A2:3B:B2")}]),
+        ]
+    )
+    agent = receive.ObexReceiveAgent(Path("/tmp/in"), bus)
+    _run_authorize(agent)
+    assert agent.authorize_target("/org/bluez/obex/server/s1/t1") == "/tmp/in/foto.jpg"
+    agent.forget("/org/bluez/obex/server/s1/t1")
+    assert agent.authorize_target("/org/bluez/obex/server/s1/t1") is None
+
+
+def test_unique_path_sufija_en_colision(tmp_path):
+    target = tmp_path / "a.jpg"
+    target.write_bytes(b"x")
+    (tmp_path / "a (1).jpg").write_bytes(b"x")
+    assert receive._unique_path(target) == tmp_path / "a (2).jpg"
+    assert receive._unique_path(tmp_path / "nuevo.jpg") == tmp_path / "nuevo.jpg"
+
+
+def test_finalize_renombra_al_nombre_real(tmp_path):
+    root = tmp_path / "in"
+    root.mkdir()
+    target = root / "recibido.bin"
+    target.write_bytes(b"hola")
+    final = receive.finalize_file(root, target, "informe.pdf")
+    assert final == root / "informe.pdf"
+    assert not target.exists()
+    assert final.read_bytes() == b"hola"
+
+
+def test_finalize_sin_proposed_mantiene(tmp_path):
+    root = tmp_path / "in"
+    root.mkdir()
+    target = root / "recibido.bin"
+    target.write_bytes(b"x")
+    assert receive.finalize_file(root, target, "") == target
+
+
+def test_finalize_colision_sufija(tmp_path):
+    root = tmp_path / "in"
+    root.mkdir()
+    target = root / "recibido.bin"
+    target.write_bytes(b"nuevo")
+    (root / "foto.jpg").write_bytes(b"viejo")
+    final = receive.finalize_file(root, target, "foto.jpg")
+    assert final == root / "foto (1).jpg"
+    assert final.read_bytes() == b"nuevo"
+
+
 def test_known_is_trusted(tmp_path):
     cfg = tmp_path / "devices.json"
     assert known.is_trusted("aa:bb:cc:dd:ee:ff", cfg) is False
