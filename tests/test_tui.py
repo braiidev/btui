@@ -60,3 +60,14 @@ def test_screen_lines_muestra_cercanos_y_mensaje():
     assert "descubrimiento: 2" in text
     assert "33:33:33:33:33:33" in text
     assert tui.HELP not in text
+
+
+class _FakeStdout:
+    def isatty(self) -> bool:
+        return False
+
+
+def test_run_sin_tty_devuelve_error(monkeypatch, capsys):
+    monkeypatch.setattr(tui.sys, "stdout", _FakeStdout())
+    assert tui.run() == 1
+    assert "requiere una terminal" in capsys.readouterr().err

@@ -8,6 +8,7 @@ importa curses de forma diferida y solo orquesta teclas y redibujo.
 from __future__ import annotations
 
 import subprocess
+import sys
 
 from btui import diagnostic as diag
 from btui import devices as devmod
@@ -122,6 +123,9 @@ def _main(stdscr) -> int:
 def run() -> int:
     import curses
 
+    if not sys.stdout.isatty():
+        print("error: --tui requiere una terminal interactiva", file=sys.stderr)
+        return 1
     try:
         return curses.wrapper(_main)
     except KeyboardInterrupt:
