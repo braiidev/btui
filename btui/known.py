@@ -90,3 +90,12 @@ def first_trusted(cfg: Path | None = None) -> str | None:
         if dev.get("trusted"):
             return dev["mac"]
     return None
+
+
+def is_trusted(mac: str, cfg: Path | None = None) -> bool:
+    """True si `mac` figura como conocido y trusted (comparable en minusculas)."""
+    needle = mac.strip().lower()
+    return any(
+        dev.get("trusted") and str(dev.get("mac", "")).strip().lower() == needle
+        for dev in load(cfg)
+    )

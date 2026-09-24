@@ -50,7 +50,11 @@ def test_direct_devices_pair_root_es_local(monkeypatch):
     import tempfile
 
     results = []
-    monkeypatch.setattr(devices, "_run", lambda *a: results.append(a) or type("P", (), {"returncode": 0})())
+    monkeypatch.setattr(
+        devices,
+        "_run",
+        lambda *a: results.append(a) or type("P", (), {"returncode": 0})(),
+    )
     monkeypatch.setattr(devices, "device_name", lambda _m: "X")
     monkeypatch.setattr(known, "config_dir", lambda: Path(tempfile.gettempdir()))
     assert _direct(["--devices", "pair", "AA:BB"]) == 0

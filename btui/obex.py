@@ -59,12 +59,15 @@ class ObexSession:
             raise RuntimeError("obex no iniciado")
         return self._bus
 
-    async def start(self) -> str:
+    async def start(self, root: Path | None = None) -> str:
         runtime = config_dir() / "runtime"
         runtime.mkdir(parents=True, exist_ok=True)
         daemon = _obexd_path()
         if daemon is None:
             raise RuntimeError("obexd no encontrado (instalar bluez-obexd)")
+        args = [daemon, "-n"]
+        if root is not None:
+            args += ["-r", str(root)]
 
         self._dbus = await asyncio.create_subprocess_exec(
             "dbus-daemon",
@@ -87,8 +90,7 @@ class ObexSession:
             "DBUS_SESSION_BUS_ADDRESS": address,
         }
         self._obexd = await asyncio.create_subprocess_exec(
-            daemon,
-            "-n",
+            *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env,

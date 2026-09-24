@@ -25,7 +25,9 @@ def test_off_as_root_toggles_radio(monkeypatch, capsys):
 
     def fake_run(cmd, **kw):
         calls.append(cmd)
-        return type("P", (), {"returncode": 0, "stdout": fake_bluetoothctl, "stderr": ""})()
+        return type(
+            "P", (), {"returncode": 0, "stdout": fake_bluetoothctl, "stderr": ""}
+        )()
 
     monkeypatch.setattr(radio.subprocess, "run", fake_run)
     monkeypatch.setattr(cli, "_is_root", lambda: True)

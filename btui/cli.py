@@ -82,6 +82,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="envia archivos por OPP (Object Push) al destino",
     )
     parser.add_argument(
+        "--receive",
+        metavar="DIR",
+        default=None,
+        help="escucha pushes OPP y los guarda en DIR (solo equipos trusted)",
+    )
+    parser.add_argument(
         "--to",
         metavar="MAC",
         default=None,
@@ -235,6 +241,11 @@ def run(argv: list[str]) -> int:
             print("error: sin destino; usa --to <mac>", file=sys.stderr)
             return 1
         return obex.send(ns.send, target)
+
+    if ns.receive:
+        from btui import receive
+
+        return receive.receive(ns.receive)
 
     for action in _SVC_ACTIONS:
         if getattr(ns, action):
