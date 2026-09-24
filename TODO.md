@@ -8,6 +8,8 @@
 - [ ] v1.0 DECISION: el bump entero a v1.0 (version + marketing + docs) lo decide el usuario, nunca automatico - v1.0
 
 ## Done
+- [x] v0.12.5: fix TUI input — al abrir renombrar/enviar/recibir se setea mode=input; las teclas escriben y no disparan acciones de navegacion (k/j/q) - v0.12.5
+- [x] v0.12.4: fix init_pair con fondo -1 (fallback 0 sin default colors) + attrs curses reales y header cyan bold - v0.12.4
 - [x] v0.12.3: estetica con color (header cyan bold, titulos bold, seleccion reverse, tags trusted/known verdes/cyan, progreso azul, confirm rojo, hint dim; estilos deterministas line_style testeable; fallback monocromo) - v0.12.3
 - [x] v0.12.2: prompt aceptar/cancelar en AuthorizePush solo para equipos no confiados (sin tty o timeout 60s -> rechaza; trusted auto-acepta) - v0.12.2
 - [x] v0.12.1: fix recepcion OPP — rename al nombre real al completar (con colisiones a (N)), carpeta persistente configurable (config.py, /tmp/recibidos default), mensaje de fin por archivo "recibido: <ruta>" - v0.12.1
