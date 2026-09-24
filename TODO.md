@@ -1,7 +1,9 @@
 # TODO
 
 ## Doing
-- [ ] v0.7: recepcion OPP (--path=<dir>) + agente OBEX trusted-only + progreso - v0.7
+- [ ] v0.7: recepcion OPP (--receive=<dir>) + agente OBEX trusted-only + progreso - v0.7
+      codigo completo y pusheado (tags v0.7 / v0.7.1); kernel miniserver 6.18.52 con
+      RFCOMM OK y servidor OPP arrancando sin error; PENDIENTE prueba real desde telefono.
 
 ## Next
 - [ ] v0.8: TUI curses base (estado adapter, conocidos, discover, acciones) - v0.8
