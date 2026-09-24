@@ -1,13 +1,13 @@
 # TODO
 
 ## Doing
-- [ ] v0.10.2: menu curses front-end del CLI (instalar/actualizar/desinstalar, start/stop/restart, on/off, TUI, send/receive) - v0.10.2
+- [ ] v0.10.3: polish (mensajes/errores uniformes, --help ordenado) - v0.10.3
 
 ## Next
-- [ ] v0.10.3: polish (mensajes/errores uniformes, --help ordenado) - v0.10.3
 - [ ] v0.7-verify: prueba real recepcion OPP desde telefono (codigo en v0.7/v0.7.1; kernel 6.18.52 con RFCOMM listo; listener probado en pty) - v0.7
 
 ## Done
+- [x] v0.10.2: menu curses front-end del CLI (--menu) - v0.10.2
 - [x] v0.10.1: --check-update (git ls-remote vs version local) - v0.10.1
 - [x] v0.9: TUI avanzado (navegacion hjkl, acciones p/t/x/c/i/s, detalle, envio con progreso, ayuda ?) - v0.9
 - [x] v0.8: TUI curses base (--tui): estado adaptador, conocidos, descubrimiento - v0.8
