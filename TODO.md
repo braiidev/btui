@@ -1,16 +1,14 @@
 # TODO
 
 ## Doing
-- [ ] v0.7: recepcion OPP (--receive=<dir>) + agente OBEX trusted-only + progreso - v0.7
-      codigo completo y pusheado (tags v0.7 / v0.7.1); kernel miniserver 6.18.52 con
-      RFCOMM OK y servidor OPP arrancando sin error; PENDIENTE prueba real desde telefono.
+- [ ] v0.9: TUI avanzado (progreso en vivo, prompts parear/aceptar/denegar, detalle, conectar=trusted) - v0.9
 
 ## Next
-- [ ] v0.8: TUI curses base (estado adapter, conocidos, discover, acciones) - v0.8
-- [ ] v0.9: TUI avanzado (progreso en vivo, prompts parear/aceptar/denegar, detalle, conectar=trusted) - v0.9
+- [ ] v0.7-verify: prueba real recepcion OPP desde telefono (codigo en v0.7/v0.7.1; kernel 6.18.52 con RFCOMM listo; listener probado en pty) - v0.7
 - [ ] v0.10: wrapper instalador interactivo (menu curses) + --check-update + polish - v0.10
 
 ## Done
+- [x] v0.8: TUI curses base (--tui): estado adaptador, conocidos, descubrimiento - v0.8
 - [x] v0.6: envio OPP (--send=[files] [--to mac]) con progreso - v0.6
 - [x] v0.5.1: adapter settings (--name/--discoverable/--pairable + --timeout) - v0.5.1
 - [x] v0.5: dispositivos (--devices list/search/accept/deny + pair + conocidos) - v0.5
