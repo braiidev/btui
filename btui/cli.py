@@ -14,6 +14,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Callable
 
 from btui import __version__
 
@@ -29,16 +30,65 @@ def build_parser() -> argparse.ArgumentParser:
         prog="btui",
         description="Gestion de Bluetooth (Alpine). CLI one-shot para verificaciones rapidas.",
     )
-    parser.add_argument("--version", action="store_true", help="muestra la version y sale")
-    parser.add_argument("--install", action="store_true", help="instala codigo + venv + wrapper + servicio")
-    parser.add_argument("--update", action="store_true", help="actualiza codigo y reinicia el servicio")
-    parser.add_argument("--uninstall", action="store_true", help="quita servicio, sudoers y binario")
-    parser.add_argument("--info", action="store_true", help="diagnostico de driver/hardware del adaptador")
-    parser.add_argument("--on", action="store_true", help="enciende el radio del adaptador")
-    parser.add_argument("--off", action="store_true", help="apaga el radio del adaptador")
-    parser.add_argument("--start", action="store_true", help="inicia el servicio OpenRC btui")
-    parser.add_argument("--stop", action="store_true", help="detiene el servicio OpenRC btui")
-    parser.add_argument("--restart", action="store_true", help="reinicia el servicio OpenRC btui")
+    parser.add_argument(
+        "--version", action="store_true", help="muestra la version y sale"
+    )
+    parser.add_argument(
+        "--install",
+        action="store_true",
+        help="instala codigo + venv + wrapper + servicio",
+    )
+    parser.add_argument(
+        "--update", action="store_true", help="actualiza codigo y reinicia el servicio"
+    )
+    parser.add_argument(
+        "--uninstall", action="store_true", help="quita servicio, sudoers y binario"
+    )
+    parser.add_argument(
+        "--info",
+        action="store_true",
+        help="diagnostico de driver/hardware del adaptador",
+    )
+    parser.add_argument(
+        "--on", action="store_true", help="enciende el radio del adaptador"
+    )
+    parser.add_argument(
+        "--off", action="store_true", help="apaga el radio del adaptador"
+    )
+    parser.add_argument(
+        "--name",
+        metavar="ALIAS",
+        default=None,
+        help="renombra el adaptador (system-alias)",
+    )
+    parser.add_argument(
+        "--discoverable",
+        choices=("on", "off"),
+        default=None,
+        help="hace visible el adaptador a otros dispositivos",
+    )
+    parser.add_argument(
+        "--pairable",
+        choices=("on", "off"),
+        default=None,
+        help="acepta/rechaza pareados entrantes",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        metavar="SEG",
+        default=None,
+        help="timeout de visibilidad (solo con --discoverable on)",
+    )
+    parser.add_argument(
+        "--start", action="store_true", help="inicia el servicio OpenRC btui"
+    )
+    parser.add_argument(
+        "--stop", action="store_true", help="detiene el servicio OpenRC btui"
+    )
+    parser.add_argument(
+        "--restart", action="store_true", help="reinicia el servicio OpenRC btui"
+    )
     parser.add_argument(
         "--devices",
         nargs="+",
@@ -46,7 +96,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="list | search | pair <mac> | accept <mac> | deny <mac>",
     )
-    parser.add_argument("command", nargs="?", default=None, help="'daemon' para el daemon en background")
+    parser.add_argument(
+        "command", nargs="?", default=None, help="'daemon' para el daemon en background"
+    )
     return parser
 
 
@@ -73,6 +125,21 @@ def _direct(argv: list[str]) -> int:
         from btui import radio
 
         return radio.set_powered(action == "on")
+    if action == "name":
+        from btui import radio
+
+        return radio.set_alias(argv[1])
+    if action == "discoverable":
+        from btui import radio
+
+        timeout = None
+        if "--timeout" in argv:
+            timeout = int(argv[argv.index("--timeout") + 1])
+        return radio.set_discoverable(argv[1] == "on", timeout)
+    if action == "pairable":
+        from btui import radio
+
+        return radio.set_pairable(argv[1] == "on")
     if action in _SVC_ACTIONS:
         return _run(["rc-service", "btui", action])
     return _run(["sh", str(REPO_ROOT / "install.sh"), f"--{action}"])
@@ -84,7 +151,7 @@ def _privileged(argv: list[str]) -> int:
     return _run(["sudo", BIN_PATH, *argv])
 
 
-def run_daemon(sleep: "function" = time.sleep) -> int:
+def run_daemon(sleep: "Callable[[int], object]" = time.sleep) -> int:
     stop = False
 
     def on_signal(_signum, _frame) -> None:
@@ -95,7 +162,8 @@ def run_daemon(sleep: "function" = time.sleep) -> int:
 
     signal.signal(signal.SIGTERM, on_signal)
     signal.signal(signal.SIGINT, on_signal)
-    print("btui daemon arrancando (placeholder v0.2)", flush=True)
+    print("btui daemon arrancando (v0.5.1)", flush=True)
+
     while not stop:
         sleep(1)
     print("btui daemon detenido", flush=True)
@@ -121,6 +189,16 @@ def run(argv: list[str]) -> int:
         if ns.devices[0] == "list":
             return devmod.run_cli("list", None)
         return _privileged(["--devices", *ns.devices])
+
+    if ns.name is not None:
+        return _privileged(["--name", ns.name])
+    if ns.discoverable is not None:
+        argv = ["--discoverable", ns.discoverable]
+        if ns.timeout is not None:
+            argv += ["--timeout", str(ns.timeout)]
+        return _privileged(argv)
+    if ns.pairable is not None:
+        return _privileged(["--pairable", ns.pairable])
 
     for action in _SVC_ACTIONS:
         if getattr(ns, action):

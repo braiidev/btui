@@ -1,3 +1,3 @@
 """btui - gestion de Bluetooth para Alpine (daemon + cli + tui)."""
 
-__version__ = "0.2"
+__version__ = "0.5.1"
