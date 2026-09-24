@@ -371,7 +371,10 @@ def _curses_pairs(colors_ok: bool) -> dict[str, int]:
     for name in STYLES:
         fg, _attr = _THEME[name]
         if fg >= 0:
-            curses.init_pair(n, fg, -1)
+            try:
+                curses.init_pair(n, fg, -1)
+            except curses.error:
+                continue
             pairs[name] = n
             n += 1
     return pairs
@@ -385,6 +388,10 @@ def _draw(stdscr, state: dict, lines: list[str]) -> None:
     colors_ok = curses.has_colors() and curses.can_change_color()
     if colors_ok:
         curses.start_color()
+        try:
+            curses.use_default_colors()
+        except curses.error:
+            pass
     pairs = _curses_pairs(colors_ok)
     for i, line in enumerate(lines[: height - 1]):
         name = line_style(state, i, line)
