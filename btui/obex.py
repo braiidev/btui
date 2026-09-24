@@ -368,27 +368,40 @@ async def _run_send(
         await session.stop()
 
 
-def send(files: list[str], address: str) -> int:
-    """Envia archivos por OPP a `address`. 0 ok, 1 error."""
+def send(
+    files: list[str],
+    address: str,
+    progress: ProgressFn | None = None,
+    announce: bool = True,
+) -> int:
+    """Envia archivos por OPP a `address`. 0 ok, 1 error.
+
+    `progress` permite inyectar un callback (la TUI lo usa); si es None y
+    `announce` es True se usa el reporte por stderr del CLI. Con
+    `announce=False` no se imprime nada (la TUI dibuja su propia pantalla).
+    """
 
     paths = [(file, Path(file)) for file in files]
     for file, path in paths:
         if not path.is_file():
-            print(f"error: no existe el archivo: {file}", file=sys.stderr)
+            if announce:
+                print(f"error: no existe el archivo: {file}", file=sys.stderr)
             return 1
     install_term_handlers()
     reap_orphan_obexd()
+    reporter = (
+        progress if progress is not None else (_print_progress if announce else None)
+    )
     try:
-        ok = asyncio.run(
-            _run_send([str(p) for _, p in paths], address, _print_progress)
-        )
+        ok = asyncio.run(_run_send([str(p) for _, p in paths], address, reporter))
     except KeyboardInterrupt:
-        print("\nenvio cancelado", file=sys.stderr)
+        if announce:
+            print("\nenvio cancelado", file=sys.stderr)
         return 130
     except RuntimeError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        if announce:
+            print(f"error: {exc}", file=sys.stderr)
         return 1
-    if ok:
+    if announce and ok:
         print("\nenvio completo", file=sys.stderr)
-        return 0
-    return 1
+    return 0 if ok else 1
