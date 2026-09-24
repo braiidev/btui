@@ -361,7 +361,7 @@ def _curse_attr(name: str, colors_ok: bool) -> int:
     return attr
 
 
-def _curses_pairs(colors_ok: bool) -> dict[str, int]:
+def _curses_pairs(colors_ok: bool, default_bg: bool) -> dict[str, int]:
     import curses
 
     pairs: dict[str, int] = {}
@@ -372,7 +372,7 @@ def _curses_pairs(colors_ok: bool) -> dict[str, int]:
         fg, _attr = _THEME[name]
         if fg >= 0:
             try:
-                curses.init_pair(n, fg, -1)
+                curses.init_pair(n, fg, -1 if default_bg else 0)
             except curses.error:
                 continue
             pairs[name] = n
@@ -386,13 +386,14 @@ def _draw(stdscr, state: dict, lines: list[str]) -> None:
     stdscr.erase()
     height, width = stdscr.getmaxyx()
     colors_ok = curses.has_colors() and curses.can_change_color()
+    default_bg = False
     if colors_ok:
         curses.start_color()
         try:
-            curses.use_default_colors()
+            default_bg = curses.use_default_colors() == 0
         except curses.error:
-            pass
-    pairs = _curses_pairs(colors_ok)
+            default_bg = False
+    pairs = _curses_pairs(colors_ok, default_bg)
     for i, line in enumerate(lines[: height - 1]):
         name = line_style(state, i, line)
         attr = _curse_attr(name, colors_ok)
