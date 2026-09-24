@@ -35,7 +35,8 @@ setup_venv() {
 }
 
 install_wrapper() {
-	wrapper="$SHARE_DIR/btui"
+	mkdir -p "$SHARE_DIR/bin"
+	wrapper="$SHARE_DIR/bin/btui"
 	cat > "$wrapper" <<EOF
 #!/bin/sh
 # btui wrapper
