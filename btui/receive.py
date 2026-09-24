@@ -176,7 +176,13 @@ async def _run_receive(root: Path, interval: float = 0.5) -> int:
 
 def receive(directory: str) -> int:
     """Escucha pushes OPP y guarda en `directory`. 0 ok (salida limpia)."""
-    return asyncio.run(_run_receive(Path(directory)))
+    obex.install_term_handlers()
+    obex.reap_orphan_obexd()
+    try:
+        return asyncio.run(_run_receive(Path(directory)))
+    except KeyboardInterrupt:
+        print("recibo cancelado", file=sys.stderr)
+        return 130
 
 
 def run_receive(argv: list[str]) -> int:

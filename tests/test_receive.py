@@ -1,12 +1,52 @@
 import asyncio
+import os
 from pathlib import Path
 
 import pytest
 from dbus_next import Variant
 from dbus_next.constants import MessageType
-from dbus_next import DBusError
+from dbus_next.errors import DBusError
 
-from btui import cli, known, receive
+from btui import cli, known, obex, receive
+
+
+def _proc_entry(root: Path, pid: int, cmd0: str, uid: int, ppid: int) -> None:
+    d = root / str(pid)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "cmdline").write_bytes(cmd0.encode() + b"\0")
+    (d / "status").write_text(f"Uid:\t{uid}\t{uid}\t{uid}\t{uid}\nPPid:\t{ppid}\n")
+
+
+def test_reap_orphan_obexd_mata_solo_huerfanos_del_usuario(
+    tmp_path, monkeypatch, capsys
+):
+    _proc_entry(
+        tmp_path, os.getpid(), "/usr/lib/bluetooth/obexd", os.getuid(), 1
+    )  # self, no tocar
+    _proc_entry(
+        tmp_path, 111, "/usr/lib/bluetooth/obexd", os.getuid(), 1
+    )  # huerfano mio -> reapar
+    _proc_entry(
+        tmp_path, 222, "/usr/lib/bluetooth/obexd", os.getuid(), 555
+    )  # activo, no tocar
+    _proc_entry(
+        tmp_path, 333, "/usr/lib/bluetooth/obexd", os.getuid() + 999, 1
+    )  # otro user
+    kills = []
+    monkeypatch.setattr(obex.os, "kill", lambda pid, sig: kills.append(pid))
+    reaped = obex.reap_orphan_obexd(tmp_path)
+    assert reaped == [111]
+    assert kills == [111]
+    assert capsys.readouterr().err.startswith("obexd huerfano(s) reap")
+
+
+def test_reap_no_crash_con_proc_sucio(tmp_path, capsys):
+    (tmp_path / "9999").mkdir()
+    (tmp_path / "9999" / "cmdline").write_bytes(b"")
+    (tmp_path / "notapid").mkdir()
+    (tmp_path / "notapid" / "cmdline").write_bytes(b"x\0")
+    assert obex.reap_orphan_obexd(tmp_path) == []
+    assert capsys.readouterr().err == ""
 
 
 class FakeReply:

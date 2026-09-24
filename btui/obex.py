@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import signal
 import sys
 from pathlib import Path
 from typing import Any, Callable, cast
@@ -39,6 +40,65 @@ ProgressFn = Callable[[int | None, int | None, str], None]
 def _obexd_path() -> str | None:
     found = shutil.which("obexd")
     return found or (ALPINE_OBEXD if Path(ALPINE_OBEXD).exists() else None)
+
+
+def reap_orphan_obexd(proc_root: Path = Path("/proc")) -> list[int]:
+    """Mata obexd huerfanos (ppid=1) del usuario: retienen los perfiles OPP.
+
+    Un obexd cuyo proceso padre (el CLI que lo abrio) murio sin poder
+    ejecutar stop() queda huérfano, sigue registrado en bluetoothd y bloquea
+    el registro de perfiles de cualquier obexd nuevo (receive).
+    Solo mata huerfanos (ppid=1); un obexd activo (hijo de otro CLI) no se toca.
+    """
+    reaped: list[int] = []
+    me = os.getpid()
+    uid = os.getuid()
+    for entry in proc_root.iterdir():
+        if not entry.name.isdigit() or int(entry.name) == me:
+            continue
+        pid = int(entry.name)
+        try:
+            cmdline = (entry / "cmdline").read_bytes().split(b"\0")
+            name = Path(cmdline[0].decode(errors="replace")).name if cmdline else ""
+            status = (entry / "status").read_text()
+        except OSError:
+            continue
+        if name != "obexd":
+            continue
+        ppid: int | None = None
+        puid: int | None = None
+        for line in status.splitlines():
+            if line.startswith("PPid:"):
+                ppid = int(line.split()[1])
+            elif line.startswith("Uid:"):
+                puid = int(line.split()[1])
+        if puid != uid or ppid != 1:
+            continue
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            continue
+        reaped.append(pid)
+    if reaped:
+        print(f"obexd huerfano(s) reap: {reaped}", file=sys.stderr, flush=True)
+    return reaped
+
+
+def install_term_handlers() -> None:
+    """Convierte SIGTERM/SIGHUP en KeyboardInterrupt para que stop() corra.
+
+    Sin esto, un SIGHUP (cierre de ssh) mata el CLI sin ejecutar los finally
+    y deja obexd/dbus-daemon huerfanos reteniendo perfiles OPP.
+    """
+
+    def _handler(signum: int, frame: object) -> None:
+        raise KeyboardInterrupt
+
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        try:
+            signal.signal(sig, _handler)
+        except (ValueError, OSError):
+            pass
 
 
 class ObexSession:
@@ -77,28 +137,32 @@ class ObexSession:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
-        if self._dbus.stdout is None:
-            raise RuntimeError("dbus-daemon sin stdout")
-        line = await self._dbus.stdout.readline()
-        address = line.decode().strip()
-        if not address:
-            raise RuntimeError("dbus-daemon no emitio direccion de sesion")
+        try:
+            if self._dbus.stdout is None:
+                raise RuntimeError("dbus-daemon sin stdout")
+            line = await self._dbus.stdout.readline()
+            address = line.decode().strip()
+            if not address:
+                raise RuntimeError("dbus-daemon no emitio direccion de sesion")
 
-        env = {
-            **os.environ,
-            "XDG_RUNTIME_DIR": str(runtime),
-            "DBUS_SESSION_BUS_ADDRESS": address,
-        }
-        self._obexd = await asyncio.create_subprocess_exec(
-            *args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-        bus = MessageBus(bus_address=address)
-        await bus.connect()
-        self._bus = bus
-        return address
+            env = {
+                **os.environ,
+                "XDG_RUNTIME_DIR": str(runtime),
+                "DBUS_SESSION_BUS_ADDRESS": address,
+            }
+            self._obexd = await asyncio.create_subprocess_exec(
+                *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
+            bus = MessageBus(bus_address=address)
+            await bus.connect()
+            self._bus = bus
+            return address
+        except BaseException:
+            await self.stop()
+            raise
 
     async def stop(self) -> None:
         for proc in (self._obexd, self._dbus):
@@ -312,10 +376,15 @@ def send(files: list[str], address: str) -> int:
         if not path.is_file():
             print(f"error: no existe el archivo: {file}", file=sys.stderr)
             return 1
+    install_term_handlers()
+    reap_orphan_obexd()
     try:
         ok = asyncio.run(
             _run_send([str(p) for _, p in paths], address, _print_progress)
         )
+    except KeyboardInterrupt:
+        print("\nenvio cancelado", file=sys.stderr)
+        return 130
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
