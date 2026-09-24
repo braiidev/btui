@@ -39,6 +39,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start", action="store_true", help="inicia el servicio OpenRC btui")
     parser.add_argument("--stop", action="store_true", help="detiene el servicio OpenRC btui")
     parser.add_argument("--restart", action="store_true", help="reinicia el servicio OpenRC btui")
+    parser.add_argument(
+        "--devices",
+        nargs="+",
+        metavar="ARG",
+        default=None,
+        help="list | search | pair <mac> | accept <mac> | deny <mac>",
+    )
     parser.add_argument("command", nargs="?", default=None, help="'daemon' para el daemon en background")
     return parser
 
@@ -55,6 +62,13 @@ def _direct(argv: list[str]) -> int:
     action = argv[0]
     if action.startswith("--"):
         action = action[2:]
+    if action == "devices":
+        from btui import devices as devmod
+
+        rest = argv[1:]
+        act = rest[0] if rest else "list"
+        mac = rest[1] if len(rest) > 1 else None
+        return devmod.run_cli(act, mac)
     if action in ("on", "off"):
         from btui import radio
 
@@ -101,6 +115,12 @@ def run(argv: list[str]) -> int:
         return info.run()
     if ns.command == "daemon":
         return run_daemon()
+    if ns.devices:
+        from btui import devices as devmod
+
+        if ns.devices[0] == "list":
+            return devmod.run_cli("list", None)
+        return _privileged(["--devices", *ns.devices])
 
     for action in _SVC_ACTIONS:
         if getattr(ns, action):
