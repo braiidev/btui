@@ -18,6 +18,7 @@ BLEUZ_SHOW = """Controller AA:BB:CC:DD:EE:FF (public)
 
 def test_parse_bluez_show() -> None:
     show = diag.parse_bluez_show(BLEUZ_SHOW)
+    assert show["Controller"] == "AA:BB:CC:DD:EE:FF"
     assert show["Powered"] == "yes"
     assert show["Discoverable"] == "no"
     assert show["Alias"] == "BlueZ 5.85"
@@ -64,3 +65,10 @@ def test_render(fake_sysfs: Path) -> None:
 def test_render_sin_adaptador() -> None:
     out = diag.render([], {})
     assert "sin adaptador hci" in out
+
+
+def test_render_fallback_mac_desde_show(fake_sysfs: Path) -> None:
+    hcis = diag.inspect_sysfs(fake_sysfs)
+    show = diag.parse_bluez_show(BLEUZ_SHOW)
+    out = diag.render([{**hcis[0], "address": ""}], show)
+    assert "AA:BB:CC:DD:EE:FF" in out

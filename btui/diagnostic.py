@@ -53,12 +53,20 @@ def inspect_sysfs(root: Path = DEFAULT_SYSFS) -> list[dict[str, str]]:
 
 
 def parse_bluez_show(text: str) -> dict[str, str]:
-    """Normaliza la salida multlinea de 'bluetoothctl show' a {campo: valor}."""
+    """Normaliza la salida multlinea de 'bluetoothctl show' a {campo: valor}.
+
+    Tambien captura la MAC del header 'Controller AA:BB:CC:DD:EE:FF (public)'
+    (en Alpine el sysfs puede no exponer hci/address).
+    """
     fields: dict[str, str] = {}
     key: str | None = None
     for raw in text.splitlines():
         line = raw.rstrip()
         if not line.strip():
+            continue
+        if line.startswith("Controller "):
+            fields["Controller"] = line.split()[1]
+            key = None
             continue
         head, sep, rest = line.partition(": ")
         if sep and head.strip():
@@ -73,7 +81,7 @@ def render(hcis: list[dict[str, str]], show: dict[str, str]) -> str:
     lines: list[str] = []
     for h in hcis:
         lines.append(f"== {h['hci']} ==")
-        lines.append(f"  direccion    {h['address'] or '-'}")
+        lines.append(f"  direccion    {h['address'] or show.get('Controller') or '-'}")
         lines.append(f"  driver       {h['driver'] or '-'}")
         lines.append(f"  bus          {h['bus'] or '-'}")
         lines.append(f"  producto     {h['product'] or '-'}")
