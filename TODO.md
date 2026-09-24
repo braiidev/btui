@@ -1,12 +1,16 @@
 # TODO
 
+# TODO
+
 ## Doing
-- [ ] v0.10.3: polish (mensajes/errores uniformes, --help ordenado) - v0.10.3
+(este milestone v0.10 esta cerrado: --menu, --check-update/--check-update y polish)
 
 ## Next
+- [ ] v1.0 DECISION: al cerrar v0.10 las tags llegan a v0.10.x; el bump entero a v1.0 (version + marketing + docs) lo decide el usuario, nunca automatico - v1.0
 - [ ] v0.7-verify: prueba real recepcion OPP desde telefono (codigo en v0.7/v0.7.1; kernel 6.18.52 con RFCOMM listo; listener probado en pty) - v0.7
 
 ## Done
+- [x] v0.10.3: polish (--help agrupado por area + epilogo de ejemplos + errores uniformes) - v0.10.3
 - [x] v0.10.2: menu curses front-end del CLI (--menu) - v0.10.2
 - [x] v0.10.1: --check-update (git ls-remote vs version local) - v0.10.1
 - [x] v0.9: TUI avanzado (navegacion hjkl, acciones p/t/x/c/i/s, detalle, envio con progreso, ayuda ?) - v0.9
