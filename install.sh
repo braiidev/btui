@@ -60,15 +60,16 @@ EOF
 
 install_sudoers() {
 	rule="$REAL_USER ALL=(root) NOPASSWD: $BIN_PATH"
-	if grep -q "NOPASSWD: $BIN_PATH" /etc/sudoers 2>/dev/null \
-			|| grep -q "NOPASSWD: $BIN_PATH" /etc/sudoers.d/btui 2>/dev/null; then
-		log "sudoers ya configurado (NOPASSWD $BIN_PATH)"
-	elif grep -q "includedir /etc/sudoers.d" /etc/sudoers 2>/dev/null; then
+	if grep -q "includedir /etc/sudoers.d" /etc/sudoers 2>/dev/null; then
 		printf '%s\n' "$rule" > /etc/sudoers.d/btui
 		chmod 0440 /etc/sudoers.d/btui
+		sed -i "/NOPASSWD: $BIN_PATH/d" /etc/sudoers
 		log "sudoers -> /etc/sudoers.d/btui"
 	else
-		printf '\n%s\n' "$rule" >> /etc/sudoers
+		rm -f /etc/sudoers.d/btui
+		if ! grep -q "NOPASSWD: $BIN_PATH" /etc/sudoers 2>/dev/null; then
+			printf '\n%s\n' "$rule" >> /etc/sudoers
+		fi
 		log "sudoers -> /etc/sudoers"
 	fi
 }
