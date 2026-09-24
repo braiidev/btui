@@ -209,10 +209,11 @@ async def wait_transfer(
 
     def handler(msg: Message) -> None:
         if (
-            getattr(msg, "interface", None) == TRANSFER_IFACE
+            getattr(msg, "interface", None) == PROPS_IFACE
             and getattr(msg, "member", None) == "PropertiesChanged"
-            and str(getattr(msg, "path", "")) == transfer_path
             and len(msg.body) >= 2
+            and str(msg.body[0]) == TRANSFER_IFACE
+            and str(getattr(msg, "path", "")) == transfer_path
         ):
             changed = dict(msg.body[1])
             status = _value(changed.get("Status"))

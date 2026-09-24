@@ -116,18 +116,21 @@ def test_wait_transfer_completa_con_progresso():
         handler(
             Message(
                 path=expected,
-                interface="org.bluez.obex.Transfer1",
+                interface="org.freedesktop.DBus.Properties",
                 member="PropertiesChanged",
-                body=[{}, changed],
+                body=["org.bluez.obex.Transfer1", changed],
             )
         )
         await asyncio.sleep(0)
         handler(
             Message(
                 path=expected,
-                interface="org.bluez.obex.Transfer1",
+                interface="org.freedesktop.DBus.Properties",
                 member="PropertiesChanged",
-                body=[{}, {"Status": Variant("s", "complete")}],
+                body=[
+                    "org.bluez.obex.Transfer1",
+                    {"Status": Variant("s", "complete")},
+                ],
             )
         )
         return await asyncio.wait_for(task, timeout=2)
