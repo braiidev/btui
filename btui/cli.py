@@ -33,6 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--install", action="store_true", help="instala codigo + venv + wrapper + servicio")
     parser.add_argument("--update", action="store_true", help="actualiza codigo y reinicia el servicio")
     parser.add_argument("--uninstall", action="store_true", help="quita servicio, sudoers y binario")
+    parser.add_argument("--info", action="store_true", help="diagnostico de driver/hardware del adaptador")
     parser.add_argument("--start", action="store_true", help="inicia el servicio OpenRC btui")
     parser.add_argument("--stop", action="store_true", help="detiene el servicio OpenRC btui")
     parser.add_argument("--restart", action="store_true", help="reinicia el servicio OpenRC btui")
@@ -88,6 +89,10 @@ def run(argv: list[str]) -> int:
     if ns.version:
         print(f"btui {__version__}")
         return 0
+    if ns.info:
+        from btui import info
+
+        return info.run()
     if ns.command == "daemon":
         return run_daemon()
 

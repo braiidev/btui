@@ -36,6 +36,13 @@ def test_service_actions_route_to_rc_service(capture, monkeypatch):
     assert capture[-1] == ["rc-service", "btui", "stop"]
 
 
+def test_info_routes(monkeypatch):
+    calls = []
+    monkeypatch.setattr("btui.info.run", lambda: calls.append("info") or 0)
+    assert cli.run(["--info"]) == 0
+    assert calls == ["info"]
+
+
 def test_daemon_is_routed(monkeypatch):
     calls = []
     monkeypatch.setattr(cli, "run_daemon", lambda: calls.append("daemon") or 0)
