@@ -262,28 +262,22 @@ async def _run_send(
     try:
         client = ObexClient(session)
         session_path = await client.create_session(address)
-        try:
-            for file in files:
-                transfer_path = await client.send_file(session_path, file)
-                ok = await wait_transfer(
-                    session.bus,
-                    transfer_path,
-                    Path(file).name,
-                    progress=progress,
-                    client=client,
+        for file in files:
+            transfer_path = await client.send_file(session_path, file)
+            ok = await wait_transfer(
+                session.bus,
+                transfer_path,
+                Path(file).name,
+                progress=progress,
+                client=client,
+            )
+            if not ok:
+                print(
+                    f"\nerror: transferencia de {Path(file).name} fallo",
+                    file=sys.stderr,
                 )
-                if not ok:
-                    print(
-                        f"\nerror: transferencia de {Path(file).name} fallo",
-                        file=sys.stderr,
-                    )
-                    return False
-            return True
-        finally:
-            try:
-                await client.remove_session(session_path)
-            except RuntimeError:
-                pass
+                return False
+        return True
     finally:
         await session.stop()
 
