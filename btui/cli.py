@@ -34,6 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--update", action="store_true", help="actualiza codigo y reinicia el servicio")
     parser.add_argument("--uninstall", action="store_true", help="quita servicio, sudoers y binario")
     parser.add_argument("--info", action="store_true", help="diagnostico de driver/hardware del adaptador")
+    parser.add_argument("--on", action="store_true", help="enciende el radio del adaptador")
+    parser.add_argument("--off", action="store_true", help="apaga el radio del adaptador")
     parser.add_argument("--start", action="store_true", help="inicia el servicio OpenRC btui")
     parser.add_argument("--stop", action="store_true", help="detiene el servicio OpenRC btui")
     parser.add_argument("--restart", action="store_true", help="reinicia el servicio OpenRC btui")
@@ -53,6 +55,10 @@ def _direct(argv: list[str]) -> int:
     action = argv[0]
     if action.startswith("--"):
         action = action[2:]
+    if action in ("on", "off"):
+        from btui import radio
+
+        return radio.set_powered(action == "on")
     if action in _SVC_ACTIONS:
         return _run(["rc-service", "btui", action])
     return _run(["sh", str(REPO_ROOT / "install.sh"), f"--{action}"])
@@ -97,6 +103,9 @@ def run(argv: list[str]) -> int:
         return run_daemon()
 
     for action in _SVC_ACTIONS:
+        if getattr(ns, action):
+            return _privileged([f"--{action}"])
+    for action in ("on", "off"):
         if getattr(ns, action):
             return _privileged([f"--{action}"])
     for action in _SCRIPT_ACTIONS:
