@@ -93,63 +93,113 @@ def test_error_reply_levanta_runtime():
 
 
 def test_wait_transfer_completa_con_progresso():
-    bus = FakeBus()
+    bus = FakeBus(
+        [
+            FakeReply(
+                [
+                    {
+                        "Status": Variant("s", "active"),
+                        "Transferred": Variant("t", 42),
+                        "Size": Variant("t", 100),
+                    }
+                ]
+            ),
+            FakeReply(
+                [
+                    {
+                        "Status": Variant("s", "complete"),
+                        "Transferred": Variant("t", 100),
+                        "Size": Variant("t", 100),
+                    }
+                ]
+            ),
+        ]
+    )
+    session = FakeSession(bus)
+    client = obex.ObexClient(session)
     progress = []
-    expected = "/org/bluez/obex/client/transfer1"
 
     async def run():
-        task = asyncio.create_task(
-            obex.wait_transfer(
-                bus,
-                expected,
-                "a.txt",
-                progress=lambda t, s, name: progress.append((t, name)),
-            )
+        return await obex.wait_transfer(
+            bus,
+            "/org/bluez/obex/client/transfer1",
+            "a.txt",
+            progress=lambda t, s, name: progress.append((t, name)),
+            client=client,
+            interval=0.01,
         )
-        await asyncio.sleep(0)
-        handler = bus.handlers[-1]
-        changed = {
-            "Status": Variant("s", "active"),
-            "Transferred": Variant("t", 42),
-            "Size": Variant("t", 100),
-        }
-        handler(
-            Message(
-                path=expected,
-                interface="org.freedesktop.DBus.Properties",
-                member="PropertiesChanged",
-                body=["org.bluez.obex.Transfer1", changed],
-            )
-        )
-        await asyncio.sleep(0)
-        handler(
-            Message(
-                path=expected,
-                interface="org.freedesktop.DBus.Properties",
-                member="PropertiesChanged",
-                body=[
-                    "org.bluez.obex.Transfer1",
-                    {"Status": Variant("s", "complete")},
-                ],
-            )
-        )
-        return await asyncio.wait_for(task, timeout=2)
 
     assert asyncio.run(run()) is True
-    assert progress == [(42, "a.txt")]
+    assert progress == [(42, "a.txt"), (100, "a.txt")]
 
 
-def test_wait_transfer_detecta_ya_completo_por_race_check():
-    bus = FakeBus([FakeReply([Variant("s", "complete")])])
+def test_wait_transfer_detecta_ya_completo_por_poll():
+    bus = FakeBus([FakeReply([{"Status": Variant("s", "complete")}])])
     session = FakeSession(bus)
     client = obex.ObexClient(session)
 
     async def run():
         return await obex.wait_transfer(
-            bus, "/org/bluez/obex/client/transfer1", "a.txt", client=client
+            bus,
+            "/org/bluez/obex/client/transfer1",
+            "a.txt",
+            client=client,
+            interval=0.01,
         )
 
     assert asyncio.run(run()) is True
+
+
+def test_wait_transfer_en_error_devuelve_false():
+    bus = FakeBus([FakeReply([{"Status": Variant("s", "error")}])])
+    session = FakeSession(bus)
+    client = obex.ObexClient(session)
+
+    async def run():
+        return await obex.wait_transfer(
+            bus,
+            "/org/bluez/obex/client/transfer1",
+            "a.txt",
+            client=client,
+            interval=0.01,
+        )
+
+    assert asyncio.run(run()) is False
+
+
+def test_wait_transfer_timeout_levanta_runtimeerror():
+    bus = FakeBus([FakeReply([{"Status": Variant("s", "active")}]) for _ in range(20)])
+    session = FakeSession(bus)
+    client = obex.ObexClient(session)
+
+    async def run():
+        await obex.wait_transfer(
+            bus,
+            "/org/bluez/obex/client/transfer1",
+            "a.txt",
+            client=client,
+            interval=0.01,
+            timeout=0.05,
+        )
+
+    with pytest.raises(RuntimeError, match="timeout"):
+        asyncio.run(run())
+
+
+def test_wait_transfer_sin_client_error():
+    with pytest.raises(RuntimeError, match="requiere client"):
+        asyncio.run(obex.wait_transfer(FakeBus(), "/t", "a.txt"))
+
+
+def test_transfer_properties_getall():
+    bus = FakeBus([FakeReply([{"Status": Variant("s", "active")}])])
+    session = FakeSession(bus)
+    client = obex.ObexClient(session)
+    props = asyncio.run(client.transfer_properties("/org/bluez/obex/client/transfer1"))
+    assert props == {"Status": Variant("s", "active")}
+    msg = bus.calls[0]
+    assert msg.interface == "org.freedesktop.DBus.Properties"
+    assert msg.member == "GetAll"
 
 
 def test_cli_send_routing_usa_primer_trusted(monkeypatch):

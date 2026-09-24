@@ -93,8 +93,9 @@ class ObexSession:
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-        self._bus = MessageBus(bus_address=address)
-        await self._bus.connect()
+        bus = MessageBus(bus_address=address)
+        await bus.connect()
+        self._bus = bus
         return address
 
     async def stop(self) -> None:
@@ -181,6 +182,16 @@ class ObexClient:
             "ss",
         )
 
+    async def transfer_properties(self, transfer_path: str) -> dict[str, Any]:
+        props = await self.message(
+            transfer_path,
+            PROPS_IFACE,
+            "GetAll",
+            [TRANSFER_IFACE],
+            "s",
+        )
+        return dict(props or {})
+
 
 def _value(value: Any) -> Any:
     return value.value if isinstance(value, Variant) else value
@@ -194,6 +205,9 @@ def _as_int(value: Any) -> int | None:
         return None
 
 
+_MAX_POLL_ERRORS = 3
+
+
 async def wait_transfer(
     bus: MessageBus,
     transfer_path: str,
@@ -201,48 +215,46 @@ async def wait_transfer(
     progress: ProgressFn | None = None,
     timeout: int = DEFAULT_TIMEOUT,
     client: ObexClient | None = None,
+    interval: float = 0.5,
 ) -> bool:
-    """Espera a que la transferencia termine; devuelve True si salio completa."""
+    """Sondea el Status del transfer hasta que termina (True=completo, False=error).
 
-    done = asyncio.Event()
-    ok = {"value": False}
+    No depende de PropertiesChanged: obexd de este host no emite las senales de
+    fd.o.DBus.Properties con metadatos fieles, asi que se sondea GetAll.
+    """
 
-    def handler(msg: Message) -> None:
-        if (
-            getattr(msg, "interface", None) == PROPS_IFACE
-            and getattr(msg, "member", None) == "PropertiesChanged"
-            and len(msg.body) >= 2
-            and str(msg.body[0]) == TRANSFER_IFACE
-            and str(getattr(msg, "path", "")) == transfer_path
-        ):
-            changed = dict(msg.body[1])
-            status = _value(changed.get("Status"))
-            transferred = _as_int(changed.get("Transferred"))
-            size = _as_int(changed.get("Size"))
+    if client is None:
+        raise RuntimeError("wait_transfer requiere client")
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    errors = 0
+    while True:
+        try:
+            props = await client.transfer_properties(transfer_path)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            errors += 1
+            if errors > _MAX_POLL_ERRORS:
+                raise RuntimeError(
+                    f"transferencia {Path(transfer_file).name}: obexd dejo de responder"
+                )
+        else:
+            errors = 0
+            status = _value(props.get("Status"))
+            transferred = _as_int(props.get("Transferred"))
+            size = _as_int(props.get("Size"))
             if progress is not None and transferred is not None:
                 progress(transferred, size, transfer_file)
             if status == TRANSFER_COMPLETE:
-                ok["value"] = True
-                done.set()
-            elif status == TRANSFER_ERROR:
-                done.set()
-
-    bus.add_message_handler(handler)
-    try:
-        if client is not None:
-            status = _value(await client.transfer_status(transfer_path))
-            if status == TRANSFER_COMPLETE:
-                ok["value"] = True
-                done.set()
-        try:
-            await asyncio.wait_for(done.wait(), timeout)
-        except asyncio.TimeoutError:
+                return True
+            if status == TRANSFER_ERROR:
+                return False
+        if loop.time() >= deadline:
             raise RuntimeError(
                 f"transferencia {Path(transfer_file).name} cancelada por timeout"
             )
-    finally:
-        bus.remove_message_handler(handler)
-    return ok["value"]
+        await asyncio.sleep(interval)
 
 
 def _print_progress(transferred: int | None, size: int | None, name: str) -> None:
