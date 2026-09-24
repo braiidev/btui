@@ -217,10 +217,12 @@ async def wait_transfer(
     client: ObexClient | None = None,
     interval: float = 0.5,
 ) -> bool:
-    """Sondea el Status del transfer hasta que termina (True=completo, False=error).
+    """Espera la transferencia sondeando GetAll; True si completo, False si error.
 
-    No depende de PropertiesChanged: obexd de este host no emite las senales de
-    fd.o.DBus.Properties con metadatos fieles, asi que se sondea GetAll.
+    obexd de este host desregistra el objeto Transfer ni bien finaliza (a los
+    microsegundos del ultimo byte) y no entrega la senal terminal fielmente.
+    Entonces: si ya se transfirio Size bytes (>0) y el objeto desaparece, se
+    asume exito. Un error de Get antes de llegar a Size es fallo duro.
     """
 
     if client is None:
@@ -228,6 +230,7 @@ async def wait_transfer(
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
     errors = 0
+    transferred_all = False
     while True:
         try:
             props = await client.transfer_properties(transfer_path)
@@ -236,6 +239,8 @@ async def wait_transfer(
         except Exception:
             errors += 1
             if errors > _MAX_POLL_ERRORS:
+                if transferred_all:
+                    return True
                 raise RuntimeError(
                     f"transferencia {Path(transfer_file).name}: obexd dejo de responder"
                 )
@@ -250,6 +255,8 @@ async def wait_transfer(
                 return True
             if status == TRANSFER_ERROR:
                 return False
+            if transferred is not None and size and transferred >= size:
+                transferred_all = True
         if loop.time() >= deadline:
             raise RuntimeError(
                 f"transferencia {Path(transfer_file).name} cancelada por timeout"

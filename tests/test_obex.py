@@ -191,6 +191,93 @@ def test_wait_transfer_sin_client_error():
         asyncio.run(obex.wait_transfer(FakeBus(), "/t", "a.txt"))
 
 
+class FakeBusFail:
+    def __init__(self, replies, fail_after):
+        self.replies = list(replies)
+        self.fail_after = fail_after
+        self.calls = 0
+
+    async def call(self, msg):
+        self.calls += 1
+        if self.calls > self.fail_after:
+            raise RuntimeError("No such object")
+        return self.replies[self.calls - 1]
+
+
+class FakeSessionFail:
+    def __init__(self, bus):
+        self._bus = bus
+
+    @property
+    def ready(self):
+        return True
+
+    @property
+    def bus(self):
+        return self._bus
+
+
+def test_wait_transfer_100pct_luego_objeto_desaparece_es_ok():
+    bus = FakeBusFail(
+        [
+            FakeReply(
+                [
+                    {
+                        "Status": Variant("s", "active"),
+                        "Transferred": Variant("t", 22),
+                        "Size": Variant("t", 22),
+                    }
+                ]
+            ),
+        ],
+        fail_after=1,
+    )
+    session = FakeSessionFail(bus)
+    client = obex.ObexClient(session)
+
+    async def run():
+        return await obex.wait_transfer(
+            bus,
+            "/org/bluez/obex/client/transfer1",
+            "a.txt",
+            client=client,
+            interval=0.01,
+        )
+
+    assert asyncio.run(run()) is True
+
+
+def test_wait_transfer_objeto_desaparece_sin_100pct_es_error():
+    bus = FakeBusFail(
+        [
+            FakeReply(
+                [
+                    {
+                        "Status": Variant("s", "active"),
+                        "Transferred": Variant("t", 5),
+                        "Size": Variant("t", 100),
+                    }
+                ]
+            ),
+        ],
+        fail_after=1,
+    )
+    session = FakeSessionFail(bus)
+    client = obex.ObexClient(session)
+
+    async def run():
+        await obex.wait_transfer(
+            bus,
+            "/org/bluez/obex/client/transfer1",
+            "a.txt",
+            client=client,
+            interval=0.01,
+        )
+
+    with pytest.raises(RuntimeError, match="dejo de responder"):
+        asyncio.run(run())
+
+
 def test_transfer_properties_getall():
     bus = FakeBus([FakeReply([{"Status": Variant("s", "active")}])])
     session = FakeSession(bus)
