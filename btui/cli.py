@@ -26,111 +26,134 @@ _SVC_ACTIONS = ("start", "stop", "restart")
 _SCRIPT_ACTIONS = ("install", "update", "uninstall")
 
 
+EPILOG = """\
+ejemplos:
+  btui --menu                       panel interactivo
+  btui --tui                        ver dispositivos y acciones
+  btui --send foto.jpg --to AA:BB:CC:DD:EE:FF
+  btui --receive ~/Descargas        escuchar pushes OPP
+  btui --check-update               avisa si hay version nueva
+"""
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="btui",
         description="Gestion de Bluetooth (Alpine). CLI one-shot para verificaciones rapidas.",
+        epilog=EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--version", action="store_true", help="muestra la version y sale"
     )
-    parser.add_argument(
+
+    life = parser.add_argument_group("ciclo de vida")
+    life.add_argument(
         "--install",
         action="store_true",
         help="instala codigo + venv + wrapper + servicio",
     )
-    parser.add_argument(
+    life.add_argument(
         "--update", action="store_true", help="actualiza codigo y reinicia el servicio"
     )
-    parser.add_argument(
+    life.add_argument(
         "--uninstall", action="store_true", help="quita servicio, sudoers y binario"
     )
-    parser.add_argument(
+    life.add_argument(
         "--check-update",
         action="store_true",
         help="consulta el remoto y avisa si hay version nueva",
     )
-    parser.add_argument(
-        "--info",
-        action="store_true",
-        help="diagnostico de driver/hardware del adaptador",
+    life.add_argument(
+        "--start", action="store_true", help="inicia el servicio OpenRC btui"
     )
-    parser.add_argument(
-        "--tui",
-        action="store_true",
-        help="interfaz curses: estado del adaptador, conocidos y descubrimiento",
+    life.add_argument(
+        "--stop", action="store_true", help="detiene el servicio OpenRC btui"
     )
-    parser.add_argument(
+    life.add_argument(
+        "--restart", action="store_true", help="reinicia el servicio OpenRC btui"
+    )
+
+    ui = parser.add_argument_group("interfaz")
+    ui.add_argument(
         "--menu",
         action="store_true",
         help="menu curses: front-end de las acciones del CLI",
     )
-    parser.add_argument(
+    ui.add_argument(
+        "--tui",
+        action="store_true",
+        help="interfaz curses: estado del adaptador, conocidos y descubrimiento",
+    )
+    ui.add_argument(
+        "--info",
+        action="store_true",
+        help="diagnostico de driver/hardware del adaptador",
+    )
+
+    radio = parser.add_argument_group("adaptador")
+    radio.add_argument(
         "--on", action="store_true", help="enciende el radio del adaptador"
     )
-    parser.add_argument(
+    radio.add_argument(
         "--off", action="store_true", help="apaga el radio del adaptador"
     )
-    parser.add_argument(
+    radio.add_argument(
         "--name",
         metavar="ALIAS",
         default=None,
         help="renombra el adaptador (system-alias)",
     )
-    parser.add_argument(
+    radio.add_argument(
         "--discoverable",
         choices=("on", "off"),
         default=None,
         help="hace visible el adaptador a otros dispositivos",
     )
-    parser.add_argument(
+    radio.add_argument(
         "--pairable",
         choices=("on", "off"),
         default=None,
         help="acepta/rechaza pareados entrantes",
     )
-    parser.add_argument(
-        "--send",
-        nargs="+",
-        metavar="ARCHIVO",
-        default=None,
-        help="envia archivos por OPP (Object Push) al destino",
-    )
-    parser.add_argument(
-        "--receive",
-        metavar="DIR",
-        default=None,
-        help="escucha pushes OPP y los guarda en DIR (solo equipos trusted)",
-    )
-    parser.add_argument(
-        "--to",
-        metavar="MAC",
-        default=None,
-        help="destino del envio (por defecto: primer dispositivo conocido trusted)",
-    )
-    parser.add_argument(
+    radio.add_argument(
         "--timeout",
         type=int,
         metavar="SEG",
         default=None,
         help="timeout de visibilidad (solo con --discoverable on)",
     )
-    parser.add_argument(
-        "--start", action="store_true", help="inicia el servicio OpenRC btui"
-    )
-    parser.add_argument(
-        "--stop", action="store_true", help="detiene el servicio OpenRC btui"
-    )
-    parser.add_argument(
-        "--restart", action="store_true", help="reinicia el servicio OpenRC btui"
-    )
-    parser.add_argument(
+
+    dev = parser.add_argument_group("dispositivos")
+    dev.add_argument(
         "--devices",
         nargs="+",
         metavar="ARG",
         default=None,
         help="list | search | pair <mac> | accept <mac> | deny <mac>",
     )
+
+    opp = parser.add_argument_group("archivos (OPP)")
+    opp.add_argument(
+        "--send",
+        nargs="+",
+        metavar="ARCHIVO",
+        default=None,
+        help="envia archivos por OPP (Object Push) al destino",
+    )
+    opp.add_argument(
+        "--receive",
+        metavar="DIR",
+        default=None,
+        help="escucha pushes OPP y los guarda en DIR (solo equipos trusted)",
+    )
+    opp.add_argument(
+        "--to",
+        metavar="MAC",
+        default=None,
+        help="destino del envio (por defecto: primer dispositivo conocido trusted)",
+    )
+
     parser.add_argument(
         "command", nargs="?", default=None, help="'daemon' para el daemon en background"
     )
