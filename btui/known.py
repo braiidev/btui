@@ -47,17 +47,21 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def add_known(mac: str, name: str, trusted: bool = True, cfg: Path | None = None) -> list[dict]:
+def add_known(
+    mac: str, name: str, trusted: bool = True, cfg: Path | None = None
+) -> list[dict]:
     devices = load(cfg)
     for dev in devices:
         if dev["mac"] == mac:
             dev["name"] = name or dev.get("name", "")
             dev["trusted"] = trusted
-            return save(devices, cfg)
+            save(devices, cfg)
+            return devices
     devices.append(
         {"mac": mac, "name": name or "", "trusted": trusted, "added_at": _now()}
     )
-    return save(devices, cfg)
+    save(devices, cfg)
+    return devices
 
 
 def remove_known(mac: str, cfg: Path | None = None) -> bool:
@@ -78,3 +82,11 @@ def set_trusted(mac: str, trusted: bool, cfg: Path | None = None) -> bool:
             save(devices, cfg)
             return True
     return False
+
+
+def first_trusted(cfg: Path | None = None) -> str | None:
+    """MAC del primer dispositivo conocido con trusted=True (destino por defecto)."""
+    for dev in load(cfg):
+        if dev.get("trusted"):
+            return dev["mac"]
+    return None

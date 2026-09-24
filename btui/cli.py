@@ -75,6 +75,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="acepta/rechaza pareados entrantes",
     )
     parser.add_argument(
+        "--send",
+        nargs="+",
+        metavar="ARCHIVO",
+        default=None,
+        help="envia archivos por OPP (Object Push) al destino",
+    )
+    parser.add_argument(
+        "--to",
+        metavar="MAC",
+        default=None,
+        help="destino del envio (por defecto: primer dispositivo conocido trusted)",
+    )
+    parser.add_argument(
         "--timeout",
         type=int,
         metavar="SEG",
@@ -211,6 +224,17 @@ def run(argv: list[str]) -> int:
         return _privileged(argv)
     if ns.pairable is not None:
         return _privileged(["--pairable", ns.pairable])
+
+    if ns.send:
+        from btui import known, obex
+
+        target = ns.to
+        if target is None:
+            target = known.first_trusted()
+        if target is None:
+            print("error: sin destino; usa --to <mac>", file=sys.stderr)
+            return 1
+        return obex.send(ns.send, target)
 
     for action in _SVC_ACTIONS:
         if getattr(ns, action):
