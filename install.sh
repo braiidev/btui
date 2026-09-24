@@ -58,6 +58,21 @@ EOF
 	log "binario -> $BIN_PATH"
 }
 
+install_sudoers() {
+	rule="$REAL_USER ALL=(root) NOPASSWD: $BIN_PATH"
+	if grep -q "NOPASSWD: $BIN_PATH" /etc/sudoers 2>/dev/null \
+			|| grep -q "NOPASSWD: $BIN_PATH" /etc/sudoers.d/btui 2>/dev/null; then
+		log "sudoers ya configurado (NOPASSWD $BIN_PATH)"
+	elif grep -q "includedir /etc/sudoers.d" /etc/sudoers 2>/dev/null; then
+		printf '%s\n' "$rule" > /etc/sudoers.d/btui
+		chmod 0440 /etc/sudoers.d/btui
+		log "sudoers -> /etc/sudoers.d/btui"
+	else
+		printf '\n%s\n' "$rule" >> /etc/sudoers
+		log "sudoers -> /etc/sudoers"
+	fi
+}
+
 install_service() {
 	mkdir -p "$CONFIG_DIR"
 	if ! is_root; then
@@ -81,9 +96,7 @@ depend() {
 EOF
 	install -m 0755 "$tmp_init" /etc/init.d/btui
 	rc-update add btui default 2>/dev/null || true
-	grep -q "$BIN_PATH" /etc/sudoers.d/btui 2>/dev/null || \
-		printf '%s\n' "$REAL_USER ALL=(root) NOPASSWD: $BIN_PATH" > /etc/sudoers.d/btui
-	chmod 0440 /etc/sudoers.d/btui
+	install_sudoers
 	if ! rc-service btui status >/dev/null 2>&1; then
 		rc-service btui start
 	fi
@@ -95,6 +108,7 @@ uninstall() {
 		rc-service btui stop 2>/dev/null || true
 		rc-update del btui default 2>/dev/null || true
 		rm -f /etc/init.d/btui /etc/sudoers.d/btui "$BIN_PATH"
+		sed -i "/NOPASSWD: $BIN_PATH/d" /etc/sudoers
 		log "servicio, sudoers y binario removidos."
 		log "Se conservan datos: $CONFIG_DIR (y codigo en $SHARE_DIR)"
 	elif command -v sudo >/dev/null 2>&1; then
