@@ -2,7 +2,7 @@
 # btui install.sh — instalador y ciclo de vida (v0.2).
 set -e
 
-VERSION="0.10"
+VERSION="0.11"
 REPO_URL="https://github.com/braiidev/btui.git"
 REAL_USER="${SUDO_USER:-$USER}"
 REAL_USER="${REAL_USER:-$(id -un)}"

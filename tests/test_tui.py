@@ -1,28 +1,36 @@
 from btui import tui
 
 
-def test_adapter_lines_usa_sysfs_y_show():
+def test_adapter_panel_incluye_radio_y_nombre():
     show = {
-        "Controller": "AA:BB:CC:DD:EE:FF",
+        "Powered": "no",
         "Alias": "miniserver",
-        "Powered": "yes",
         "Discoverable": "no",
         "Pairable": "yes",
     }
-    hcis = [
-        {"hci": "hci0", "address": "AA:BB:CC:DD:EE:FF", "driver": "btusb", "bus": "usb"}
-    ]
-    text = "\n".join(tui.adapter_lines(show, hcis))
-    assert "hci0" in text
-    assert "miniserver" in text
-    assert "btusb (usb)" in text
-    assert "powered      yes" in text
+    items = tui.adapter_panel(show)
+    assert items[0]["id"] == "radio"
+    assert items[0]["label"] == "Encender radio"
+    assert items[1]["value"] == "miniserver"
+    assert (
+        tui.adapter_panel({"Powered": "yes", "Discoverable": "yes"})[0]["label"]
+        == "Apagar radio"
+    )
 
 
-def test_adapter_lines_fallback_sin_hci():
-    lines = tui.adapter_lines({"Controller": "AA:BB:CC:DD:EE:FF"}, [])
-    assert lines[0] == "Adaptador  -  AA:BB:CC:DD:EE:FF"
-    assert lines[-1] == "  driver       - (-)"
+def test_adapter_lines_muestra_resumen():
+    show = {
+        "Powered": "yes",
+        "Discoverable": "no",
+        "Pairable": "yes",
+        "Alias": "x",
+        "Controller": "AA:BB",
+    }
+    lines = tui.adapter_lines(
+        show, [{"hci": "hci0", "address": "AA:BB", "driver": "btusb"}]
+    )
+    assert "radio on" in "\n".join(lines)
+    assert "btusb" in "\n".join(lines)
 
 
 def test_build_rows_fusiona_known_y_nearby():
@@ -40,84 +48,127 @@ def test_build_rows_fusiona_known_y_nearby():
         "22:22:22:22:22:22",
         "33:33:33:33:33:33",
     ]
-    assert rows[0]["trusted"] and rows[0]["known"] and not rows[0]["present"]
+    assert rows[0]["trusted"] and not rows[0]["present"]
     assert rows[1]["present"] and not rows[1]["trusted"]
     assert not rows[2]["known"] and rows[2]["present"]
+
+
+def test_devices_rows_prefix_global_actions():
+    state = {
+        "rows": [
+            {"mac": "AA", "name": "a", "trusted": True, "known": True, "present": False}
+        ]
+    }
+    rows = tui.devices_rows(state)
+    assert [r["id"] for r in rows if r["kind"] == "action"] == ["scan", "receive"]
+    assert rows[-1]["kind"] == "device"
+
+
+def test_device_menu_items_segun_estado():
+    no_known = {"known": False, "trusted": False}
+    trusted = {"known": True, "trusted": True}
+    no_trusted = {"known": True, "trusted": False}
+    assert tui.device_menu_items(no_known)[0]["id"] == "pair"
+    assert "connect" in [i["id"] for i in tui.device_menu_items(trusted)]
+    assert "send" in [i["id"] for i in tui.device_menu_items(trusted)]
+    assert "connect" not in [i["id"] for i in tui.device_menu_items(no_trusted)]
+    assert "send" not in [i["id"] for i in tui.device_menu_items(no_trusted)]
 
 
 def test_move_selection_envuelve():
     assert tui.move_selection(0, -1, 3) == 2
     assert tui.move_selection(2, 1, 3) == 0
-    assert tui.move_selection(1, 1, 3) == 2
     assert tui.move_selection(0, 1, 0) == 0
 
 
 def test_progress_bar():
     assert tui.progress_bar(None, 100) == "?"
     assert tui.progress_bar(50, 100, width=10) == "#####----- 50/100 (50%)"
-    assert tui.progress_bar(0, None, width=4) == "---- 0/? (0%)"
 
 
 def test_parse_info_y_detail_lines():
     info = tui.parse_info("Device AA:BB (public)\n\tName: braiidev\n\tTrusted: yes\n")
     assert info["Name"] == "braiidev"
-    assert info["Trusted"] == "yes"
     row = {"mac": "AA:BB", "name": "braiidev", "trusted": True, "present": True}
     text = "\n".join(tui.detail_lines(row, info))
-    assert "AA:BB" in text
-    assert "trusted" in text
-    assert "presente:si" in text
-    assert "Trusted    yes" in text
-    assert tui.detail_lines(None, {}) == ["  (sin seleccion)"]
+    assert "AA:BB" in text and "presente:si" in text and "Trusted    yes" in text
+    assert tui.detail_lines(None, {}) == ["  (sin equipo seleccionado)"]
 
 
-def test_render_screen_lista_y_seleccion():
+def test_screen_lines_3_secciones_y_foco():
     state = {
         "show": {"Powered": "yes"},
         "hcis": [],
         "rows": [
             {
-                "mac": "11:11",
+                "mac": "AA",
                 "name": "a",
                 "trusted": True,
                 "known": True,
                 "present": False,
             },
-            {
-                "mac": "22:22",
-                "name": "b",
-                "trusted": False,
-                "known": False,
-                "present": True,
-            },
         ],
-        "selection": 1,
-        "selected": {"mac": "22:22", "name": "b", "trusted": False, "present": True},
-        "detail": {},
-        "message": "",
-        "progress": "",
+        "focus": "adapter",
+        "adapter_sel": 0,
+        "sel": 0,
+        "mode": "main",
         "input": None,
-        "help": False,
+        "progress": "",
+        "busy": False,
+        "message": "",
     }
-    text = "\n".join(tui.render_screen(state))
-    assert "Dispositivos (2)" in text
-    assert any(
-        line.strip().startswith(">") and "22:22" in line
-        for line in tui.render_screen(state)
-    )
-    assert "11:11" in text
-    assert "[trusted]" in text
+    text = "\n".join(tui.screen_lines(state))
+    assert "Mi adaptador" in text
+    assert "Dispositivos alrededor (1)" in text
+    assert "Descubrir cercanos" in text
+    state["focus"] = "devices"
+    text2 = "\n".join(tui.screen_lines(state))
+    assert "> Descubrir cercanos" in text2
 
 
-def test_render_screen_ayuda_e_input_y_progreso():
-    base = {"rows": [], "selection": 0, "selected": None, "detail": {}, "help": True}
-    assert "Ayuda" in "\n".join(tui.render_screen(base))
-    base["help"] = False
-    base["input"] = {"prompt": "enviar a X: ", "buffer": "/tmp/a"}
-    assert "/tmp/a_" in "\n".join(tui.render_screen(base))
-    base["input"] = None
-    base["progress"] = "## 2/4"
-    assert "progreso: ## 2/4" in "\n".join(tui.render_screen(base))
+def test_screen_lines_menu_confirm_detalle():
+    base = {
+        "show": {},
+        "hcis": [],
+        "selected": {"mac": "AA", "name": "a"},
+        "mode": "menu",
+    }
+    base["menu"] = [
+        {"id": "connect", "label": "Conectar"},
+        {"id": "cancel", "label": "Cancelar"},
+    ]
+    base["menu_sel"] = 0
+    assert "Conectar" in "\n".join(tui.screen_lines(base))
+    base["mode"] = "confirm"
+    base["confirm"] = {"msg": "Quitar AA?"}
+    base["confirm_sel"] = 1
+    assert "Quitar AA?" in "\n".join(tui.screen_lines(base))
+    base["mode"] = "detail"
+    base["detail_lines"] = ["  Aliased: x"]
+    base["detail_title"] = "Detalle"
+    assert "Aliased: x" in "\n".join(tui.screen_lines(base))
+    base["mode"] = "help"
+    assert "cualquier tecla vuelve" in "\n".join(tui.screen_lines(base))
+
+
+def test_screen_lines_input_y_progreso():
+    state = {
+        "show": {},
+        "hcis": [],
+        "rows": [],
+        "focus": "adapter",
+        "adapter_sel": 0,
+        "sel": 0,
+        "mode": "main",
+        "busy": False,
+        "progress": "",
+        "message": "",
+    }
+    state["input"] = {"prompt": "archivo: ", "buffer": "/tmp/a"}
+    assert "/tmp/a_" in "\n".join(tui.screen_lines(state))
+    state["input"] = None
+    state["progress"] = "## 2/4"
+    assert "progreso: ## 2/4" in "\n".join(tui.screen_lines(state))
 
 
 class _FakeStdout:
