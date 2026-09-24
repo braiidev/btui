@@ -302,14 +302,97 @@ def screen_lines(state: dict) -> list[str]:
     return lines
 
 
-def _draw(stdscr, lines: list[str]) -> None:
+STYLES = (
+    "header",
+    "title",
+    "selected",
+    "tag-trusted",
+    "tag-known",
+    "progress",
+    "danger",
+    "hint",
+    "plain",
+)
+
+_THEME: dict[str, tuple[int, int]] = {
+    "header": (-1, 36),  # cyan
+    "title": (-1, 1),  # bold
+    "selected": (-1, 7),  # reverse
+    "tag-trusted": (32, 1),  # verde bold
+    "tag-known": (36, 0),  # cyan
+    "progress": (33, 0),  # azul
+    "danger": (31, 1),  # rojo bold
+    "hint": (-1, 2),  # dim
+    "plain": (-1, 0),
+}
+
+
+def _has_tag(text: str, tag: str) -> bool:
+    return f"[{tag}]" in text
+
+
+def line_style(state: dict, index: int, text: str) -> str:
+    """Estilo de una linea (determinista, testeable sin curses)."""
+    mode = state.get("mode", "main")
+    if index < len(header_lines(state)):
+        if mode == "confirm" and index == 0:
+            return "danger"
+        return "header"
+    if text.startswith(" >"):
+        return "selected"
+    if _has_tag(text, "trusted"):
+        return "tag-trusted"
+    if _has_tag(text, "known"):
+        return "tag-known"
+    if text.startswith("progreso:"):
+        return "progress"
+    strip = text.strip()
+    if strip.startswith(("Mi adaptador", "Dispositivos alrededor")):
+        return "title"
+    if strip.startswith(("Acciones -", "Detalle")):
+        return "title"
+    if strip == HINT or strip.startswith(("Enter acepta", "Enter ejecuta", "Esc")):
+        return "hint"
+    return "plain"
+
+
+def _curse_attr(name: str, colors_ok: bool) -> int:
+    _fg, attr = _THEME.get(name, _THEME["plain"])
+    return attr
+
+
+def _curses_pairs(colors_ok: bool) -> dict[str, int]:
+    import curses
+
+    pairs: dict[str, int] = {}
+    if not colors_ok:
+        return pairs
+    n = 1
+    for name in STYLES:
+        fg, _attr = _THEME[name]
+        if fg >= 0:
+            curses.init_pair(n, fg, -1)
+            pairs[name] = n
+            n += 1
+    return pairs
+
+
+def _draw(stdscr, state: dict, lines: list[str]) -> None:
     import curses
 
     stdscr.erase()
     height, width = stdscr.getmaxyx()
+    colors_ok = curses.has_colors() and curses.can_change_color()
+    if colors_ok:
+        curses.start_color()
+    pairs = _curses_pairs(colors_ok)
     for i, line in enumerate(lines[: height - 1]):
+        name = line_style(state, i, line)
+        attr = _curse_attr(name, colors_ok)
+        if name in pairs:
+            attr |= curses.color_pair(pairs[name])
         try:
-            stdscr.addnstr(i, 0, line, width - 1)
+            stdscr.addnstr(i, 0, line, width - 1, attr)
         except curses.error:
             pass
     stdscr.refresh()
@@ -618,7 +701,7 @@ def _main(stdscr) -> int:
         state["sel"] = min(state["sel"], max(0, len(drows) - 1))
         adapter_items = adapter_panel(state.get("show", {}))
         state["adapter_sel"] = min(state["adapter_sel"], max(0, len(adapter_items) - 1))
-        _draw(stdscr, screen_lines(state))
+        _draw(stdscr, state, screen_lines(state))
         if state.get("terminal") is not None:
             terminal_cmd = cast(list[str], state["terminal"])
             state["terminal"] = None
