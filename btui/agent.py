@@ -24,6 +24,23 @@ AGENT_IFACE = "org.bluez.Agent1"
 AGENT_CAPABILITY = "NoInputNoOutput"
 BLUEZ_NAME = "org.bluez"
 
+# BlueZ no expone XMLIntrospection en runtime: hay que pasarle el XML del
+# AgentManager1 a dbus-next 0.2.x para poder usar get_proxy_object.
+AGENT_MANAGER_INTROSPECTION = """<node>
+  <interface name="org.bluez.AgentManager1">
+    <method name="RegisterAgent">
+      <arg type="o" name="agent" direction="in"/>
+      <arg type="s" name="capability" direction="in"/>
+    </method>
+    <method name="UnregisterAgent">
+      <arg type="o" name="agent" direction="in"/>
+    </method>
+    <method name="RequestDefaultAgent">
+      <arg type="o" name="agent" direction="in"/>
+    </method>
+  </interface>
+</node>"""
+
 
 class BtuiAgent(ServiceInterface):
     """Auto-acepta pedidos de pareado sin interaccion (NoInputNoOutput)."""
@@ -70,7 +87,7 @@ async def register_agent(
     bus.export(path, agent_cls())
     bus_any = cast(Any, bus)
     manager = bus_any.get_proxy_object(
-        BLUEZ_NAME, "/org/bluez", "org.bluez.AgentManager1"
+        BLUEZ_NAME, "/org/bluez", AGENT_MANAGER_INTROSPECTION
     )
     iface = cast(Any, manager.get_interface("org.bluez.AgentManager1"))
     await iface.call_register_agent(path, capability)

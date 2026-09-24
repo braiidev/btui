@@ -31,7 +31,10 @@ class FakeBus:
     def export(self, path, obj):
         self.exported.append((path, obj))
 
-    def get_proxy_object(self, *args):
+    def get_proxy_object(self, bus_name, path, introspection):
+        assert bus_name == "org.bluez"
+        assert path == "/org/bluez"
+        assert "AgentManager1" in introspection
         return FakeProxy(self.calls)
 
 
