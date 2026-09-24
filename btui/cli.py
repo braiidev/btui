@@ -46,6 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--uninstall", action="store_true", help="quita servicio, sudoers y binario"
     )
     parser.add_argument(
+        "--check-update",
+        action="store_true",
+        help="consulta el remoto y avisa si hay version nueva",
+    )
+    parser.add_argument(
         "--info",
         action="store_true",
         help="diagnostico de driver/hardware del adaptador",
@@ -213,6 +218,10 @@ def run(argv: list[str]) -> int:
     if ns.version:
         print(f"btui {__version__}")
         return 0
+    if ns.check_update:
+        from btui import update
+
+        return update.run()
     if ns.info:
         from btui import info
 
