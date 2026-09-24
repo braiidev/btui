@@ -180,3 +180,79 @@ def test_run_sin_tty_devuelve_error(monkeypatch, capsys):
     monkeypatch.setattr(tui.sys, "stdout", _FakeStdout())
     assert tui.run() == 1
     assert "requiere una terminal" in capsys.readouterr().err
+
+
+def _base_state() -> dict:
+    return {
+        "show": {
+            "Powered": "yes",
+            "Alias": "btui",
+            "Discoverable": "yes",
+            "Pairable": "yes",
+        },
+        "hcis": [],
+        "rows": [],
+        "focus": "devices",
+        "adapter_sel": 0,
+        "sel": 0,
+        "mode": "main",
+        "menu": [],
+        "menu_sel": 0,
+        "input": None,
+        "detail_lines": [],
+        "message": "",
+        "busy": False,
+    }
+
+
+def test_receive_action_abre_input_con_modo_input():
+    state = _base_state()
+    tui._devices_action(state, {"kind": "action", "id": "receive"})
+    assert state["mode"] == "input"
+    assert state["input"]["kind"] == "receive"
+    assert state["input"]["buffer"] == "/tmp/recibidos"
+
+
+def test_send_menu_abre_input_con_modo_input():
+    state = _base_state()
+    state["selected"] = {"mac": "AA:BB", "name": "pc"}
+    tui._menu_choose(state, "send")
+    assert state["mode"] == "input"
+    assert state["input"]["kind"] == "send"
+    assert state["input"]["mac"] == "AA:BB"
+
+
+def test_name_action_abre_input_con_modo_input():
+    state = _base_state()
+    tui._adapter_action(state, "name")
+    assert state["mode"] == "input"
+    assert state["input"]["kind"] == "name"
+
+
+def test_handle_input_edita_y_no_dispara_acciones():
+    import curses
+
+    state = _base_state()
+    state["mode"] = "input"
+    state["input"] = {"prompt": "x: ", "buffer": "", "kind": "name"}
+    for ch in "archivo.txt":
+        tui._handle_input(state, ord(ch))
+    tui._handle_input(state, curses.KEY_BACKSPACE)
+    assert state["input"]["buffer"] == "archivo.tx"
+    assert state["mode"] == "input"
+    tui._handle_input(state, 27)
+    assert state["input"] is None
+    assert state["mode"] == "main"
+
+
+def test_input_modo_ignora_teclas_de_navegacion():
+    import curses
+
+    state = _base_state()
+    state["mode"] = "input"
+    state["input"] = {"prompt": "x: ", "buffer": "/tmp", "kind": "receive"}
+    tui._handle_input(state, ord("k"))
+    tui._handle_input(state, ord("j"))
+    tui._handle_input(state, ord("q"))
+    assert state["mode"] == "input"
+    assert state["input"]["buffer"] == "/tmpk jq".replace(" ", "")

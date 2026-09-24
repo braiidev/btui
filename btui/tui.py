@@ -511,6 +511,7 @@ def _adapter_action(state: dict, item_id: str) -> None:
         _run_action(state, act)
     elif item_id == "name":
         state["input"] = {"prompt": "nuevo alias: ", "buffer": "", "kind": "name"}
+        state["mode"] = "input"
     elif item_id == "discoverable":
         on = show.get("Discoverable") != "yes"
 
@@ -542,17 +543,16 @@ def _devices_action(state: dict, row: dict) -> None:
         if row["id"] == "scan":
             _maybe_power(state, lambda: _refresh_nearby(state))
         elif row["id"] == "receive":
-            _maybe_power(
-                state,
-                lambda: state.__setitem__(
-                    "input",
-                    {
-                        "prompt": "dir destino (Enter acepta): ",
-                        "buffer": config.get_receive_dir(),
-                        "kind": "receive",
-                    },
-                ),
-            )
+
+            def _open_receive() -> None:
+                state["input"] = {
+                    "prompt": "dir destino (Enter acepta): ",
+                    "buffer": config.get_receive_dir(),
+                    "kind": "receive",
+                }
+                state["mode"] = "input"
+
+            _maybe_power(state, _open_receive)
         return
     state["selected"] = row
     state["menu"] = device_menu_items(row)
@@ -584,7 +584,7 @@ def _menu_choose(state: dict, item_id: str) -> None:
         state["mode"] = "main"
         _run_action(state, lambda: _disconnect(mac))
     elif item_id == "send":
-        state["mode"] = "main"
+        state["mode"] = "input"
         state["input"] = {
             "prompt": f"archivo a enviar a {row.get('name') or mac}: ",
             "buffer": "",
