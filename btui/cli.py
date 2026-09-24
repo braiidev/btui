@@ -12,6 +12,7 @@ import argparse
 import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Callable
@@ -151,7 +152,9 @@ def _privileged(argv: list[str]) -> int:
     return _run(["sudo", BIN_PATH, *argv])
 
 
-def run_daemon(sleep: "Callable[[int], object]" = time.sleep) -> int:
+def run_daemon(
+    sleep: "Callable[[int], object]" = time.sleep, start_agent: bool = True
+) -> int:
     stop = False
 
     def on_signal(_signum, _frame) -> None:
@@ -162,7 +165,16 @@ def run_daemon(sleep: "Callable[[int], object]" = time.sleep) -> int:
 
     signal.signal(signal.SIGTERM, on_signal)
     signal.signal(signal.SIGINT, on_signal)
-    print("btui daemon arrancando (v0.5.1)", flush=True)
+    print("btui daemon arrancando (v0.5.2: agent + bucle)", flush=True)
+
+    if start_agent:
+        from btui import agent as agent_mod
+
+        runner = threading.Thread(target=agent_mod.run_agent_thread, daemon=True)
+        runner.start()
+        print(
+            f"agente de pareado registrado ({agent_mod.AGENT_CAPABILITY})", flush=True
+        )
 
     while not stop:
         sleep(1)

@@ -64,4 +64,4 @@ def test_daemon_placeholder_stops_on_signal(monkeypatch):
         invoked["signal"] = handler
 
     monkeypatch.setattr(signal, "signal", fake_signal)
-    assert cli.run_daemon(sleep=fake_sleep) == 0
+    assert cli.run_daemon(sleep=fake_sleep, start_agent=False) == 0
