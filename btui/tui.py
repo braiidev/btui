@@ -9,6 +9,7 @@ testearla sin curses. La app curses se importa de forma diferida.
 
 from __future__ import annotations
 
+import curses
 import subprocess
 import sys
 from typing import Callable, cast
@@ -315,14 +316,14 @@ STYLES = (
 )
 
 _THEME: dict[str, tuple[int, int]] = {
-    "header": (-1, 36),  # cyan
-    "title": (-1, 1),  # bold
-    "selected": (-1, 7),  # reverse
-    "tag-trusted": (32, 1),  # verde bold
+    "header": (36, curses.A_BOLD),  # cyan bold
+    "title": (-1, curses.A_BOLD),
+    "selected": (-1, curses.A_REVERSE),
+    "tag-trusted": (32, curses.A_BOLD),  # verde bold
     "tag-known": (36, 0),  # cyan
     "progress": (33, 0),  # azul
-    "danger": (31, 1),  # rojo bold
-    "hint": (-1, 2),  # dim
+    "danger": (31, curses.A_BOLD),  # rojo bold
+    "hint": (-1, curses.A_DIM),
     "plain": (-1, 0),
 }
 

@@ -78,14 +78,19 @@ def test_progreso_style():
 
 
 def test_theme_atributos_sin_color():
+    import curses
+
     assert tui._curse_attr("plain", False) == 0
-    assert tui._curse_attr("selected", False) == 7
-    assert tui._curse_attr("title", False) == 1
-    assert tui._curse_attr("hint", False) == 2
+    assert tui._curse_attr("selected", False) == curses.A_REVERSE
+    assert tui._curse_attr("title", False) == curses.A_BOLD
+    assert tui._curse_attr("hint", False) == curses.A_DIM
 
 
 def test_theme_mapa_colores():
+    import curses
+
     assert tui._THEME["tag-trusted"][0] == 32
     assert tui._THEME["danger"][0] == 31
-    assert tui._THEME["header"][0] == -1
+    assert tui._THEME["header"][0] == 36
+    assert tui._THEME["header"][1] == curses.A_BOLD
     assert set(tui._THEME) == set(tui.STYLES)
