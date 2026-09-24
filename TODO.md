@@ -4,10 +4,13 @@
 (sin task en curso; pendientes abajo)
 
 ## Next
+- [ ] v0.7-verify: prueba real recepcion OPP desde telefono (radio on + listener activo en miniserver) - v0.7
 - [ ] v1.0 DECISION: el bump entero a v1.0 (version + marketing + docs) lo decide el usuario, nunca automatico - v1.0
-- [ ] v0.7-verify: prueba real recepcion OPP desde telefono (radio ya queda on con la TUI v0.11; listener probado en pty) - v0.7
 
 ## Done
+- [x] v0.12.3: estetica con color (header cyan bold, titulos bold, seleccion reverse, tags trusted/known verdes/cyan, progreso azul, confirm rojo, hint dim; estilos deterministas line_style testeable; fallback monocromo) - v0.12.3
+- [x] v0.12.2: prompt aceptar/cancelar en AuthorizePush solo para equipos no confiados (sin tty o timeout 60s -> rechaza; trusted auto-acepta) - v0.12.2
+- [x] v0.12.1: fix recepcion OPP — rename al nombre real al completar (con colisiones a (N)), carpeta persistente configurable (config.py, /tmp/recibidos default), mensaje de fin por archivo "recibido: <ruta>" - v0.12.1
 - [x] v0.11: TUI 3 secciones (cabecera / Mi adaptador / Dispositivos alrededor), menu contextual por equipo, radio on/off, gate de radio, receive desde la TUI, mensajes reales de connect - v0.11
 - [x] v0.10.3: polish (--help agrupado por area + epilogo de ejemplos + errores uniformes) - v0.10.3
 - [x] v0.10.2: menu curses front-end del CLI (--menu) - v0.10.2
